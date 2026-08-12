@@ -9,20 +9,20 @@ function testSigner() {
   signer.Key = 'AK_TEST_ACCESS_KEY';
   signer.Secret = 'SK_TEST_SECRET_KEY';
 
-  const req = new HttpRequest(
-    'POST',
+  const headers = signer.sign(new HttpRequest(
+    'GET',
     'https://c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com/',
-    { 'Content-Type': 'application/json' },
-    '{"app_name":"demo"}'
-  );
+    { 'User-Agent': 'DeployAction/1.0', 'X-Apig-Mode': 'debug' },
+    ''
+  ));
 
-  const headers = signer.sign(req);
-  assert.ok(headers['Authorization'], 'Authorization 头应存在');
-  assert.ok(/^SDK-HMAC-SHA256 Access=/.test(headers['Authorization']), 'Authorization 前缀应为 SDK-HMAC-SHA256');
+  assert.ok(headers['X-Apig-Authorization'], 'X-Apig-Authorization 头应存在');
+  assert.ok(/^SDK-HMAC-SHA256 Access=/.test(headers['X-Apig-Authorization']), '前缀应为 SDK-HMAC-SHA256 Access=');
+  assert.ok(/SignedHeaders=/.test(headers['X-Apig-Authorization']), '应包含 SignedHeaders');
+  assert.ok(/Signature=[0-9a-f]{64}/.test(headers['X-Apig-Authorization']), 'Signature 应为 64 位 hex');
   assert.ok(headers['x-sdk-date'], 'x-sdk-date 头应存在');
-  assert.ok(headers['host'], 'host 头应存在');
-  assert.ok(/SignedHeaders=/.test(headers['Authorization']), '应包含 SignedHeaders');
-  assert.ok(/Signature=[0-9a-f]{64}/.test(headers['Authorization']), 'Signature 应为 64 位 hex');
+  // 与调试客户端一致：签名头包含 user-agent;x-apig-mode;x-sdk-date
+  assert.ok(/SignedHeaders=user-agent;x-apig-mode;x-sdk-date/.test(headers['X-Apig-Authorization']), '签名头应覆盖 user-agent;x-apig-mode;x-sdk-date');
   console.log('PASS testSigner');
 }
 

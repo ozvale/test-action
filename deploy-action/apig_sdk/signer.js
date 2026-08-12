@@ -57,11 +57,10 @@ class Signer {
    */
   sign(r) {
     const headers = {};
-    // Host 头
-    headers['host'] = new URL(r.url).host;
     // 请求时间（GMT，格式 YYYYMMDDTHHMMSSZ）
     headers['x-sdk-date'] = this.#getTime();
-    // 合并用户自定义请求头（统一转小写）
+    // 合并用户自定义请求头（统一转小写）。注意：host 由底层 HTTP 库自动补充，不参与签名，
+    // 与 APIG 调试客户端（SignedHeaders=user-agent;x-apig-mode;x-sdk-date）保持一致。
     if (r.headers) {
       for (const key of Object.keys(r.headers)) {
         headers[key.toLowerCase()] = r.headers[key];
@@ -73,7 +72,7 @@ class Signer {
     const stringToSign = this.#getStringToSign(headers['x-sdk-date'], canonicalRequest);
     const signature = this.#calculateSignature(stringToSign);
 
-    headers['Authorization'] =
+    headers['X-Apig-Authorization'] =
       'SDK-HMAC-SHA256 Access=' + this.Key +
       ', SignedHeaders=' + signedHeaders +
       ', Signature=' + signature;
