@@ -1,29 +1,52 @@
 'use strict';
 
 const assert = require('assert');
-const { Signer, HttpRequest } = require('../apig_sdk/signer');
+const { V11Signer, hkdfGetDerKeySha256, APIC_SERVICE } = require('../apig_sdk/signer_v11');
 const HuaweiCloudClient = require('../src/huaweicloud-client');
 
-function testSigner() {
-  const signer = new Signer();
+function testV11Signer() {
+  const signer = new V11Signer({ region: 'cn-southwest-2' });
   signer.Key = 'AK_TEST_ACCESS_KEY';
   signer.Secret = 'SK_TEST_SECRET_KEY';
 
-  const headers = signer.sign(new HttpRequest(
+  const headers = signer.sign(
     'GET',
     'https://c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com/',
-    { 'User-Agent': 'DeployAction/1.0', 'X-Apig-Mode': 'debug' },
+    { 'Content-Type': 'application/json', 'User-Agent': 'DeployAction/1.0' },
     ''
-  ));
+  );
 
-  assert.ok(headers['X-Apig-Authorization'], 'X-Apig-Authorization 头应存在');
-  assert.ok(/^SDK-HMAC-SHA256 Access=/.test(headers['X-Apig-Authorization']), '前缀应为 SDK-HMAC-SHA256 Access=');
-  assert.ok(/SignedHeaders=/.test(headers['X-Apig-Authorization']), '应包含 SignedHeaders');
-  assert.ok(/Signature=[0-9a-f]{64}/.test(headers['X-Apig-Authorization']), 'Signature 应为 64 位 hex');
+  assert.ok(headers['Authorization'], 'Authorization 头应存在');
+  assert.ok(/^V11-HMAC-SHA256 Credential=/.test(headers['Authorization']), '前缀应为 V11-HMAC-SHA256 Credential=');
+  assert.ok(/SignedHeaders=/.test(headers['Authorization']), '应包含 SignedHeaders');
+  assert.ok(/Signature=[0-9a-f]{64}/.test(headers['Authorization']), 'Signature 应为 64 位 hex');
+  assert.ok(headers['host'], 'host 头应存在（自动加入并参与签名）');
   assert.ok(headers['x-sdk-date'], 'x-sdk-date 头应存在');
-  // 与调试客户端一致：签名头包含 user-agent;x-apig-mode;x-sdk-date
-  assert.ok(/SignedHeaders=user-agent;x-apig-mode;x-sdk-date/.test(headers['X-Apig-Authorization']), '签名头应覆盖 user-agent;x-apig-mode;x-sdk-date');
-  console.log('PASS testSigner');
+  // Credential 作用域应包含 apic 服务名
+  assert.ok(new RegExp('/' + APIC_SERVICE + ', ').test(headers['Authorization']), 'Credential 应包含 apic 服务名');
+  console.log('PASS testV11Signer');
+}
+
+function testV11CredentialScope() {
+  const signer = new V11Signer({ region: 'cn-southwest-2' });
+  signer.Key = 'AK_TEST_ACCESS_KEY';
+  signer.Secret = 'SK_TEST_SECRET_KEY';
+  const headers = signer.sign('GET', 'https://x.apic.cn-southwest-2.huaweicloudapis.com/', {}, '');
+  const m = headers['Authorization'].match(/Credential=([^,\s]+)/);
+  assert.ok(m, '应包含 Credential');
+  const parts = m[1].split('/');
+  assert.strictEqual(parts.length, 4, 'Credential 应为 AK/date/region/service 四段');
+  assert.strictEqual(parts[1], headers['x-sdk-date'].substring(0, 8), 'Credential 日期段应为 YYYYMMDD');
+  assert.strictEqual(parts[2], 'cn-southwest-2', 'Credential 区域段应为 cn-southwest-2');
+  assert.strictEqual(parts[3], APIC_SERVICE, 'Credential 服务段应为 apic');
+  console.log('PASS testV11CredentialScope');
+}
+
+function testHKDF() {
+  const key = hkdfGetDerKeySha256('AK_TEST', 'SK_TEST', '20260812/cn-southwest-2/apic');
+  assert.ok(key, 'HKDF 应派生密钥');
+  assert.match(key, /^[0-9a-f]{64}$/, '派生密钥应为 64 位 hex');
+  console.log('PASS testHKDF');
 }
 
 function testUrnConstruction() {
@@ -74,7 +97,9 @@ function testMask() {
   console.log('PASS testMask');
 }
 
-testSigner();
+testV11Signer();
+testV11CredentialScope();
+testHKDF();
 testUrnConstruction();
 testExtractRegion();
 testCredentialCache();

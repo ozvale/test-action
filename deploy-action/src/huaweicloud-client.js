@@ -18,7 +18,7 @@
 
 const https = require('https');
 const core = require('@actions/core');
-const { Signer, HttpRequest } = require('../apig_sdk/signer');
+const { V11Signer } = require('../apig_sdk/signer_v11');
 
 // ---- 命名约定常量（必须与华为云侧配置一致）----
 const OIDC_PROVIDER_NAME = 'GitHubActions';
@@ -126,24 +126,21 @@ class HuaweiCloudClient {
     const url = `https://${this.apigHost}${path}`;
     const payload = body ? JSON.stringify(body) : '';
 
-    const signer = new Signer();
+    const signer = new V11Signer({ region: this.region });
     signer.Key = credentials.accessKeyId;
     signer.Secret = credentials.secretAccessKey;
 
-    this._log(`-- 对 APIG 请求进行 SDK-HMAC-SHA256 签名（X-Apig-Authorization）--`);
+    this._log(`-- 对 APIG 请求进行 V11-HMAC-SHA256 签名（Authorization 头）--`);
     this._log(`使用临时 AK : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
     this._log(`SecurityToken 是否携带 : ${credentials.securityToken ? '是' : '否'}`);
 
-    // 与 APIG 调试客户端一致：签名覆盖 user-agent;x-apig-mode;x-sdk-date，
-    // 因此仅传入 User-Agent 与 X-Apig-Mode（GET 无请求体，无需 Content-Type 参与签名）
-    const signedHeaders = signer.sign(new HttpRequest(method, url, {
-      'User-Agent': 'DeployAction/1.0',
-      'X-Apig-Mode': 'debug'
-    }, payload));
+    // 使用官方 APIG V11 签名：签名写入标准 Authorization 头，host/x-sdk-date 参与签名
+    const signedHeaders = signer.sign(method, url, {
+      'Content-Type': 'application/json',
+      'User-Agent': 'DeployAction/1.0'
+    }, payload);
     // 临时凭证调用必须携带会话令牌（不参与签名）
     signedHeaders['X-Security-Token'] = credentials.securityToken;
-    // 业务请求仍需声明 JSON 内容类型（不参与签名）
-    signedHeaders['Content-Type'] = 'application/json';
 
     const res = await this._sendRequest(method, url, signedHeaders, payload);
 
