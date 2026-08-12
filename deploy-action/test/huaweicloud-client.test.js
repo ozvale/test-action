@@ -65,8 +65,18 @@ function testCredentialCache() {
   console.log('PASS testCredentialCache');
 }
 
+function testMask() {
+  const masked = HuaweiCloudClient._mask('abcdefghijklmnopqrst');
+  assert.ok(masked.includes('***'), '脱敏结果应包含掩码');
+  assert.ok(!masked.includes('cdefghijklmnopqr'), '脱敏不应泄露中间内容');
+  assert.strictEqual(HuaweiCloudClient._mask(''), '(空)');
+  assert.strictEqual(HuaweiCloudClient._mask(null), '(空)');
+  console.log('PASS testMask');
+}
+
 testSigner();
 testUrnConstruction();
 testExtractRegion();
 testCredentialCache();
+testMask();
 console.log('ALL TESTS PASSED');
