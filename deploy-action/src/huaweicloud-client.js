@@ -146,6 +146,20 @@ class HuaweiCloudClient {
 
     this._log(`APIG 响应状态码 : ${res.status}`);
     this._log(`APIG 响应体    : ${JSON.stringify(res.data)}`);
+
+    // 针对常见 APIG 错误码输出排查提示，便于快速定位
+    const code = res.data && (res.data.error_code || res.data.code);
+    if (code) {
+      this._log(`=== APIG 错误排查提示（${code}）===`);
+      if (code === 'APIG.0602') {
+        this._log(`凭证主体无权限调用该 API 或账号不匹配。请检查：`);
+        this._log(`  1. 信任委托 ${AGENCY_NAME} 是否已绑定可调用 APIG 的身份策略（含 apig:api:call 授权项，如 APIG Invoker/APIG Administrator）；`);
+        this._log(`  2. 委托所在账号（accountId=${this.accountId}）是否就是创建该 APIG 实例/API 的账号，跨账号调用会报此错误；`);
+        this._log(`  3. 该 API 是否已发布，且对当前主体允许调用。`);
+      } else if (code === 'APIG.0301' || code === 'APIG.0624') {
+        this._log(`多为签名信息不匹配：请核对请求方法/路径/请求体/客户端时间，以及 V11 签名算法与区域是否一致。`);
+      }
+    }
     return res;
   }
 
