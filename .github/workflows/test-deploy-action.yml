@@ -32,7 +32,29 @@ jobs:
       - name: 调用自研插件（本地路径引用，使用默认账号 ID）
         uses: ./deploy-action
         id: deploy
+        env:
+          # 诊断模式：配置永久 AK/SK（一个具备 APIG 权限的 IAM 用户），
+          # 插件将跳过 OIDC/STS，直接用永久凭证调用 APIG，用于验证 APIG 的 IAM 认证是否正常。
+          # 未配置时留空即可，插件自动走 OIDC + STS 临时凭证链路。
+          HUAWEICLOUD_SDK_AK: ${{ secrets.HUAWEICLOUD_SDK_AK }}
+          HUAWEICLOUD_SDK_SK: ${{ secrets.HUAWEICLOUD_SDK_SK }}
 
       - name: 打印插件输出
         run: |
           echo "deploy-status: ${{ steps.deploy.outputs.deploy-status }}"
+
+      # ---- OIDC 上传文件到华为云 OBS（验证 OIDC 链路是否跑通）----
+      - name: 生成待上传的测试文件
+        run: |
+          echo "Hello OBS via OIDC! time=$(date -u +%FT%TZ)" > ./hello-oidc.txt
+          cat ./hello-oidc.txt
+
+      - name: 通过 OIDC 上传文件到 OBS
+        uses: ./obs-upload-action
+        id: obs
+        with:
+          file: ./hello-oidc.txt
+
+      - name: 打印 OBS 上传结果
+        run: |
+          echo "OBS etag: ${{ steps.obs.outputs.etag }}"

@@ -131,16 +131,20 @@ class HuaweiCloudClient {
     signer.Secret = credentials.secretAccessKey;
 
     this._log(`-- 对 APIG 请求进行 V11-HMAC-SHA256 签名（Authorization 头）--`);
-    this._log(`使用临时 AK : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
+    this._log(`凭证来源 : ${credentials.mode || (credentials.securityToken ? '临时(STS)' : '永久')}`);
+    this._log(`使用 AK   : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
     this._log(`SecurityToken 是否携带 : ${credentials.securityToken ? '是' : '否'}`);
 
-    // 使用官方 APIG V11 签名：X-Security-Token 必须作为参与签名的请求头，
-    // 否则 APIG 无法校验临时凭证与签名的绑定关系（会报 APIG.0602）。
-    const signedHeaders = signer.sign(method, url, {
+    // 请求头集合：仅在使用临时凭证时携带 X-Security-Token（永久凭证不需要）。
+    // 使用临时 AK/SK 时，X-Security-Token 必须作为参与签名的请求头，否则 APIG 会报 APIG.0602。
+    const reqHeaders = {
       'Content-Type': 'application/json',
-      'User-Agent': 'DeployAction/1.0',
-      'X-Security-Token': credentials.securityToken
-    }, payload);
+      'User-Agent': 'DeployAction/1.0'
+    };
+    if (credentials.securityToken) {
+      reqHeaders['X-Security-Token'] = credentials.securityToken;
+    }
+    const signedHeaders = signer.sign(method, url, reqHeaders, payload);
 
     const res = await this._sendRequest(method, url, signedHeaders, payload);
 
@@ -168,6 +172,13 @@ class HuaweiCloudClient {
    * 命中有效缓存则直接复用，否则走完整 OIDC + STS 换证流程。
    */
   async _getCredentials() {
+    // 诊断模式：配置了永久 AK/SK 时，直接使用永久凭证直连 APIG，跳过 OIDC/STS 链路。
+    // 用于验证 APIG 的 IAM 认证 + V11 签名本身是否正常（隔离"token 类型"问题）。
+    const permanent = this._getPermanentCredentials();
+    if (permanent) {
+      this._log('-- 检测到永久 AK/SK（诊断模式），跳过 OIDC/STS，直接使用永久凭证调用 APIG --');
+      return permanent;
+    }
     if (this._isValid(this._credentials)) {
       this._log(`-- 临时凭证缓存有效，直接复用（有效期剩余约 ${Math.round((this._credentials.expiresAt - Date.now()) / 1000)} 秒）--`);
       return this._credentials;
@@ -177,6 +188,20 @@ class HuaweiCloudClient {
     }
     this._credentials = await this._assumeAgencyWithOIDC();
     return this._credentials;
+  }
+
+  /**
+   * 读取环境变量中的永久 AK/SK（诊断用）。
+   * 当 HUAWEICLOUD_SDK_AK 与 HUAWEICLOUD_SDK_SK 均存在时返回永久凭证，否则返回 null。
+   * @returns {Object|null} { accessKeyId, secretAccessKey, mode: '永久' }
+   */
+  _getPermanentCredentials() {
+    const ak = process.env.HUAWEICLOUD_SDK_AK;
+    const sk = process.env.HUAWEICLOUD_SDK_SK;
+    if (ak && sk) {
+      return { accessKeyId: ak, secretAccessKey: sk, securityToken: null, mode: '永久' };
+    }
+    return null;
   }
 
   /** 判断缓存凭证是否仍有效（未过期且留有缓冲时间）。 */

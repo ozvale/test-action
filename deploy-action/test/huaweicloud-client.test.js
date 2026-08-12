@@ -104,6 +104,28 @@ function testCredentialCache() {
   console.log('PASS testCredentialCache');
 }
 
+function testPermanentCredentials() {
+  const client = new HuaweiCloudClient('12345678901234567890');
+
+  // 默认未设置环境变量 -> 返回 null（走 OIDC/STS 链路）
+  delete process.env.HUAWEICLOUD_SDK_AK;
+  delete process.env.HUAWEICLOUD_SDK_SK;
+  assert.strictEqual(client._getPermanentCredentials(), null, '未配置永久 AK/SK 时应返回 null');
+
+  // 设置了永久 AK/SK -> 返回永久凭证且不带 securityToken
+  process.env.HUAWEICLOUD_SDK_AK = 'AK_PERMANENT';
+  process.env.HUAWEICLOUD_SDK_SK = 'SK_PERMANENT';
+  const cred = client._getPermanentCredentials();
+  assert.ok(cred, '配置永久 AK/SK 后应返回永久凭证');
+  assert.strictEqual(cred.accessKeyId, 'AK_PERMANENT');
+  assert.strictEqual(cred.mode, '永久');
+  assert.strictEqual(cred.securityToken, null, '永久凭证不应携带 securityToken');
+
+  delete process.env.HUAWEICLOUD_SDK_AK;
+  delete process.env.HUAWEICLOUD_SDK_SK;
+  console.log('PASS testPermanentCredentials');
+}
+
 function testMask() {
   const masked = HuaweiCloudClient._mask('abcdefghijklmnopqrst');
   assert.ok(masked.includes('***'), '脱敏结果应包含掩码');
@@ -120,5 +142,6 @@ testHKDF();
 testUrnConstruction();
 testExtractRegion();
 testCredentialCache();
+testPermanentCredentials();
 testMask();
 console.log('ALL TESTS PASSED');
