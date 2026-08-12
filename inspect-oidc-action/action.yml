@@ -1,0 +1,27 @@
+name: 'Inspect OIDC Token'
+description: '解码 GitHub OIDC JWT 并打印 iss/aud/azp/sub 声明，用于与华为云信任策略比对'
+
+inputs:
+  audience:
+    description: '申请的 OIDC audience，需与华为云信任策略 oidc:aud 一致'
+    required: false
+    default: 'huawei-cloud-oidc'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 查看 OIDC 令牌声明
+      uses: actions/github-script@v7
+      env:
+        OIDC_AUDIENCE: ${{ inputs.audience }}
+      with:
+        script: |
+          const audience = process.env.OIDC_AUDIENCE;
+          const jwt = await core.getIDToken(audience);
+          const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
+          console.log('audience =', audience);
+          console.log('iss =', payload.iss);
+          console.log('aud =', JSON.stringify(payload.aud));
+          console.log('azp =', payload.azp);
+          console.log('sub =', payload.sub);
+          console.log('完整声明 =', JSON.stringify(payload, null, 2));

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test-deploy:
+  test-apig:
     name: 测试华为云 APIG 调用插件
     runs-on: ubuntu-latest
     steps:
@@ -18,16 +18,7 @@ jobs:
 
       # 调试：解码 OIDC 令牌，核对 iss/aud/sub 是否与华为云信任策略一致
       - name: 查看 OIDC 令牌声明
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const jwt = await core.getIDToken('huawei-cloud-oidc');
-            const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
-            console.log('iss =', payload.iss);
-            console.log('aud =', JSON.stringify(payload.aud));
-            console.log('azp =', payload.azp);
-            console.log('sub =', payload.sub);
-            console.log('完整声明 =', JSON.stringify(payload, null, 2));
+        uses: ./inspect-oidc-action
 
       - name: 调用自研插件（本地路径引用，使用默认账号 ID）
         uses: ./deploy-action
@@ -43,7 +34,17 @@ jobs:
         run: |
           echo "deploy-status: ${{ steps.deploy.outputs.deploy-status }}"
 
-      # ---- OIDC 上传文件到华为云 OBS（验证 OIDC 链路是否跑通）----
+  test-obs:
+    name: 测试华为云 OBS 上传插件
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码（含插件源码）
+        uses: actions/checkout@v4
+
+      # 调试：解码 OIDC 令牌，核对 iss/aud/sub 是否与华为云信任策略一致
+      - name: 查看 OIDC 令牌声明
+        uses: ./inspect-oidc-action
+
       - name: 生成待上传的测试文件
         run: |
           echo "Hello OBS via OIDC! time=$(date -u +%FT%TZ)" > ./hello-oidc.txt
