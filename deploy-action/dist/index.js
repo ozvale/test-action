@@ -28069,7 +28069,7 @@ const core = __nccwpck_require__(7484);
 const HuaweiCloudClient = __nccwpck_require__(2551);
 
 // 默认账号 ID（可替换为真实华为云账号 ID）
-const DEFAULT_ACCOUNT_ID = '12345678901234567890';
+const DEFAULT_ACCOUNT_ID = '4d29a984c4fe4e6eb5d404a853d0084e';
 
 async function run() {
   try {
@@ -28080,10 +28080,8 @@ async function run() {
 
     core.info(`Deploying via Huawei Cloud APIG (region=${client.region}, account=${accountId})...`);
 
-    // 调用 APIG 接口
-    const result = await client.callApi('/', 'POST', {
-      action: 'deploy'
-    });
+    // 调用 APIG 接口（GET）
+    const result = await client.callApi('/', 'GET');
 
     // 打印完整调用结果
     core.info(`APIG 接口调用完成，HTTP 状态码: ${result.status}`);
