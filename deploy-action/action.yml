@@ -5,7 +5,7 @@ inputs:
   huawei-account-id:
     description: '华为云账号 ID'
     required: false
-    default: '12345678901234567890'
+    default: '4d29a984c4fe4e6eb5d404a853d0084e'
 
 outputs:
   deploy-status:
