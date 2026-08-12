@@ -42,6 +42,22 @@ function testV11CredentialScope() {
   console.log('PASS testV11CredentialScope');
 }
 
+function testV11SecurityTokenSigned() {
+  const signer = new V11Signer({ region: 'cn-southwest-2' });
+  signer.Key = 'AK_TEST_ACCESS_KEY';
+  signer.Secret = 'SK_TEST_SECRET_KEY';
+  const token = 'hQ5-test-security-token-value';
+  const headers = signer.sign(
+    'GET',
+    'https://x.apic.cn-southwest-2.huaweicloudapis.com/',
+    { 'X-Security-Token': token },
+    ''
+  );
+  assert.ok(headers['X-Security-Token'] === token, 'X-Security-Token 头应保留');
+  assert.ok(/SignedHeaders=.*x-security-token/.test(headers['Authorization']), 'X-Security-Token 应参与签名');
+  console.log('PASS testV11SecurityTokenSigned');
+}
+
 function testHKDF() {
   const key = hkdfGetDerKeySha256('AK_TEST', 'SK_TEST', '20260812/cn-southwest-2/apic');
   assert.ok(key, 'HKDF 应派生密钥');
@@ -99,6 +115,7 @@ function testMask() {
 
 testV11Signer();
 testV11CredentialScope();
+testV11SecurityTokenSigned();
 testHKDF();
 testUrnConstruction();
 testExtractRegion();

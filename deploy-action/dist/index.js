@@ -26038,13 +26038,13 @@ class HuaweiCloudClient {
     this._log(`使用临时 AK : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
     this._log(`SecurityToken 是否携带 : ${credentials.securityToken ? '是' : '否'}`);
 
-    // 使用官方 APIG V11 签名：签名写入标准 Authorization 头，host/x-sdk-date 参与签名
+    // 使用官方 APIG V11 签名：X-Security-Token 必须作为参与签名的请求头，
+    // 否则 APIG 无法校验临时凭证与签名的绑定关系（会报 APIG.0602）。
     const signedHeaders = signer.sign(method, url, {
       'Content-Type': 'application/json',
-      'User-Agent': 'DeployAction/1.0'
+      'User-Agent': 'DeployAction/1.0',
+      'X-Security-Token': credentials.securityToken
     }, payload);
-    // 临时凭证调用必须携带会话令牌（不参与签名）
-    signedHeaders['X-Security-Token'] = credentials.securityToken;
 
     const res = await this._sendRequest(method, url, signedHeaders, payload);
 
