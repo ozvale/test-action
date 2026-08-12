@@ -1,0 +1,25 @@
+name: Test Deploy Action
+
+on:
+  workflow_dispatch:
+
+# 必须声明此权限，否则无法申请 OIDC JWT（这不是 secret，是 GitHub 的权限声明）
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-deploy:
+    name: 测试华为云 APIG 调用插件
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码（含插件源码）
+        uses: actions/checkout@v4
+
+      - name: 调用自研插件（本地路径引用，使用默认账号 ID）
+        uses: ./deploy-action
+        id: deploy
+
+      - name: 打印插件输出
+        run: |
+          echo "deploy-status: ${{ steps.deploy.outputs.deploy-status }}"
