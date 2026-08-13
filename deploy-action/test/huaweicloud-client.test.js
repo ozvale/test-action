@@ -147,6 +147,28 @@ function testMask() {
   console.log('PASS testMask');
 }
 
+function testMaskSensitiveJson() {
+  const client = new HuaweiCloudClient('12345678901234567890');
+  const out = client._maskSensitiveJson({
+    credentials: {
+      access_key_id: 'AK_SECRET_VALUE_123',
+      secret_access_key: 'SK_SECRET_VALUE_456',
+      security_token: 'TOKEN_SECRET_VALUE_789',
+      expiration: '2026-08-12T08:58:09Z'
+    },
+    error_code: 'APIG.0602',
+    error_msg: 'Bad request'
+  });
+  assert.ok(!out.includes('AK_SECRET_VALUE_123'), 'AK 应被脱敏');
+  assert.ok(!out.includes('SK_SECRET_VALUE_456'), 'SK 应被脱敏');
+  assert.ok(!out.includes('TOKEN_SECRET_VALUE_789'), 'SecurityToken 应被脱敏');
+  assert.ok(out.includes('APIG.0602'), '非敏感字段应保留');
+  assert.ok(out.includes('2026-08-12T08:58:09Z'), '过期时间应保留');
+  assert.strictEqual(client._maskSensitiveJson(null), '(无)');
+  assert.strictEqual(client._maskSensitiveJson(undefined), '(无)');
+  console.log('PASS testMaskSensitiveJson');
+}
+
 testV11Signer();
 testV11CredentialScope();
 testV11SecurityTokenSigned();
@@ -157,4 +179,5 @@ testExtractRegion();
 testCredentialCache();
 testPermanentCredentials();
 testMask();
+testMaskSensitiveJson();
 console.log('ALL TESTS PASSED');

@@ -26025,6 +26025,31 @@ class HuaweiCloudClient {
   }
 
   /**
+   * 对 JSON 对象中的敏感字段做脱敏后返回字符串。
+   * 覆盖 STS/APIG 响应中常见的凭证字段，避免日志泄露。
+   */
+  _maskSensitiveJson(obj) {
+    if (!obj) {
+      return '(无)';
+    }
+    const masked = JSON.parse(JSON.stringify(obj));
+    const sensitiveKeys = ['access_key_id', 'secret_access_key', 'security_token', 'id_token', 'token', 'access', 'secret', 'securitytoken', 'idToken'];
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return;
+      for (const k of Object.keys(node)) {
+        const lk = k.toLowerCase();
+        if (sensitiveKeys.some((s) => lk === s.toLowerCase()) && typeof node[k] === 'string' && node[k].length > 0) {
+          node[k] = HuaweiCloudClient._mask(node[k], 6, 6);
+        } else if (typeof node[k] === 'object') {
+          walk(node[k]);
+        }
+      }
+    };
+    walk(masked);
+    return JSON.stringify(masked);
+  }
+
+  /**
    * 调用 APIG 接口。
    * @param {string} path   API 路径，如 /v1/applications/deploy
    * @param {string} method HTTP 方法，如 POST
@@ -26061,10 +26086,32 @@ class HuaweiCloudClient {
     }
     const signedHeaders = signer.sign(method, url, reqHeaders, payload);
 
+    // ---- 打印完整请求头（敏感字段脱敏，便于排查签名与凭证问题）----
+    this._log(`-- 完整请求头（脱敏）--`);
+    for (const k of Object.keys(signedHeaders)) {
+      let v = String(signedHeaders[k]);
+      const lk = k.toLowerCase();
+      if (lk === 'authorization') {
+        // 脱敏 Authorization 中的签名与 AK：保留算法与结构，隐藏 Credential/Key/Signature
+        v = v.replace(/Credential=[^,]+/, 'Credential=***')
+          .replace(/Signature=[0-9a-f]+/i, 'Signature=***');
+      } else if (lk === 'x-security-token') {
+        v = HuaweiCloudClient._mask(v, 10, 10);
+      }
+      this._log(`  ${k}: ${v}`);
+    }
+    this._log(`-- 请求体 --`);
+    this._log(payload ? payload : '(空)');
+
     const res = await this._sendRequest(method, url, signedHeaders, payload);
 
     this._log(`APIG 响应状态码 : ${res.status}`);
-    this._log(`APIG 响应体    : ${JSON.stringify(res.data)}`);
+    this._log(`-- APIG 响应头 --`);
+    for (const k of Object.keys(res.headers || {})) {
+      this._log(`  ${k}: ${res.headers[k]}`);
+    }
+    this._log(`-- APIG 响应体 --`);
+    this._log(JSON.stringify(res.data));
 
     // 针对常见 APIG 错误码输出排查提示，便于快速定位
     const code = res.data && (res.data.error_code || res.data.code);
@@ -26169,11 +26216,14 @@ class HuaweiCloudClient {
 
     this._log(`=== 步骤2：调用 STS AssumeAgencyWithOIDC ===`);
     this._log(`endpoint : ${this.stsEndpoint}`);
-    this._log(`provider_urn        : ${body.provider_urn}`);
-    this._log(`agency_urn          : ${body.agency_urn}`);
-    this._log(`agency_session_name : ${body.agency_session_name}`);
-    this._log(`duration_seconds    : ${body.duration_seconds}`);
-    this._log(`id_token            : ${HuaweiCloudClient._mask(body.id_token, 20, 20)}`);
+    this._log(`-- STS 请求头 --`);
+    this._log(`  Content-Type: application/json`);
+    this._log(`-- STS 请求体（脱敏）--`);
+    this._log(`  provider_urn        : ${body.provider_urn}`);
+    this._log(`  agency_urn          : ${body.agency_urn}`);
+    this._log(`  agency_session_name : ${body.agency_session_name}`);
+    this._log(`  duration_seconds    : ${body.duration_seconds}`);
+    this._log(`  id_token            : ${HuaweiCloudClient._mask(body.id_token, 20, 20)}`);
 
     const res = await this._sendRequest(
       'POST',
@@ -26183,6 +26233,12 @@ class HuaweiCloudClient {
     );
 
     this._log(`STS 响应状态码 : ${res.status}`);
+    this._log(`-- STS 响应头 --`);
+    for (const k of Object.keys(res.headers || {})) {
+      this._log(`  ${k}: ${res.headers[k]}`);
+    }
+    this._log(`-- STS 响应体（脱敏）--`);
+    this._log(this._maskSensitiveJson(res.data));
 
     if (res.status !== 200) {
       const code = res.data && (res.data.error_code || res.data.code);
@@ -26242,7 +26298,12 @@ class HuaweiCloudClient {
               data = { raw };
             }
           }
-          resolve({ status: res.statusCode, data });
+          // 收集响应头（小写 key），供调用方打印排查
+          const headers = {};
+          for (const k of Object.keys(res.headers || {})) {
+            headers[k.toLowerCase()] = res.headers[k];
+          }
+          resolve({ status: res.statusCode, data, headers });
         });
       });
 
