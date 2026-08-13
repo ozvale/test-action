@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { V11Signer, hkdfGetDerKeySha256, APIC_SERVICE } = require('../apig_sdk/signer_v11');
+const { V11Signer, hkdfGetDerKeySha256, canonicalHeaders, APIC_SERVICE } = require('../apig_sdk/signer_v11');
 const HuaweiCloudClient = require('../src/huaweicloud-client');
 
 function testV11Signer() {
@@ -56,6 +56,18 @@ function testV11SecurityTokenSigned() {
   assert.ok(headers['X-Security-Token'] === token, 'X-Security-Token 头应保留');
   assert.ok(/SignedHeaders=.*x-security-token/.test(headers['Authorization']), 'X-Security-Token 应参与签名');
   console.log('PASS testV11SecurityTokenSigned');
+}
+
+function testCanonicalHeadersCaseInsensitive() {
+  // 回归测试：canonicalHeaders 必须对小写 key 也能取到原始大小写 key 的值，
+  // 否则 X-Security-Token / Content-Type 等头会变成 "undefined"，导致 APIG.0602。
+  const headers = { 'Content-Type': 'application/json', 'X-Security-Token': 'tok_ABC123' };
+  const signed = Object.keys(headers).map((k) => k.toLowerCase()).sort();
+  const out = canonicalHeaders(headers, signed);
+  assert.ok(out.includes('content-type:application/json'), `应包含 content-type 正确值: ${out}`);
+  assert.ok(out.includes('x-security-token:tok_ABC123'), `应包含 x-security-token 正确值: ${out}`);
+  assert.ok(!out.includes('undefined'), `不应包含 undefined: ${out}`);
+  console.log('PASS testCanonicalHeadersCaseInsensitive');
 }
 
 function testHKDF() {
@@ -138,6 +150,7 @@ function testMask() {
 testV11Signer();
 testV11CredentialScope();
 testV11SecurityTokenSigned();
+testCanonicalHeadersCaseInsensitive();
 testHKDF();
 testUrnConstruction();
 testExtractRegion();

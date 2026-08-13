@@ -118,11 +118,22 @@ function canonicalQueryString(searchParams) {
   return arr.join('&');
 }
 
-/** CanonicalHeaders：按 signed headers 顺序，name:value\n（value 去首尾空格）。 */
+/**
+ * CanonicalHeaders：按 signed headers 顺序，name:value\n（value 去首尾空格）。
+ *
+ * 注意：allHeaders 的 key 可能保留原始大小写（如 X-Security-Token、Content-Type），
+ * 而 signedHeaders 中的 key 是全小写。因此必须先构建小写 key 的查找表，
+ * 否则会取到 undefined，导致规范请求错误、签名不匹配（表现为 APIG.0602 等）。
+ * 该逻辑与官方 signer.py 中 CanonicalHeaders 先构建 _headers[keyEncoded] 字典一致。
+ */
 function canonicalHeaders(allHeaders, signedHeaders) {
+  const normalized = {};
+  for (const k of Object.keys(allHeaders)) {
+    normalized[k.toLowerCase()] = allHeaders[k];
+  }
   const arr = [];
   for (const k of signedHeaders) {
-    arr.push(k + ':' + String(allHeaders[k]).trim());
+    arr.push(k + ':' + String(normalized[k]).trim());
   }
   return arr.join('\n') + '\n';
 }
@@ -251,7 +262,7 @@ function getTime() {
   );
 }
 
-module.exports = { V11Signer, hkdfGetDerKeySha256, urlEncode, APIC_SERVICE };
+module.exports = { V11Signer, hkdfGetDerKeySha256, urlEncode, canonicalHeaders, APIC_SERVICE };
 
 
 /***/ }),
