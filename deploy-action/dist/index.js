@@ -28270,7 +28270,8 @@ async function run() {
     core.info(`APIG 接口调用完成，HTTP 状态码: ${result.status}`);
     core.info(`APIG 接口响应: ${JSON.stringify(result.data)}`);
 
-    if (result.status === 200 && result.data && result.data.success) {
+    // 判断调用是否成功：HTTP 状态码为 2xx 即视为成功
+    if (result.status >= 200 && result.status < 300) {
       core.setOutput('deploy-status', 'success');
       core.info('Deploy succeeded!');
     } else {
