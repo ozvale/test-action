@@ -11,7 +11,7 @@ function testV11Signer() {
 
   const headers = signer.sign(
     'GET',
-    'https://c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com/',
+    'https://242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com/',
     { 'Content-Type': 'application/json', 'User-Agent': 'DeployAction/1.0' },
     ''
   );
@@ -90,7 +90,7 @@ function testUrnConstruction() {
 }
 
 function testExtractRegion() {
-  const host = 'c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com';
+  const host = '242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com';
   assert.strictEqual(HuaweiCloudClient.extractRegion(host), 'cn-southwest-2');
   assert.throws(() => HuaweiCloudClient.extractRegion('invalid-host.com'));
   console.log('PASS testExtractRegion');

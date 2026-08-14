@@ -15,8 +15,8 @@ async function run() {
 
     core.info(`Deploying via Huawei Cloud APIG (region=${client.region}, account=${accountId})...`);
 
-    // 调用 APIG 接口（GET）
-    const result = await client.callApi('/', 'GET');
+    // 调用 APIG 接口（GET，路径 /version）
+    const result = await client.callApi('/version', 'GET');
 
     // 打印完整调用结果
     core.info(`APIG 接口调用完成，HTTP 状态码: ${result.status}`);

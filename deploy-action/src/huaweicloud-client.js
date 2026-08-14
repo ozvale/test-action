@@ -26,7 +26,7 @@ const AGENCY_NAME = 'github-actions-deploy';
 const AUDIENCE = 'huawei-cloud-oidc';
 
 // ---- 默认值（可由华为云管理员提供后按需修改）----
-const DEFAULT_APIG_HOST = 'c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com';
+const DEFAULT_APIG_HOST = '242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com';
 const STS_ASSUME_PATH = '/v5/agencies/assume-with-oidc';
 const DEFAULT_DURATION_SECONDS = 3600;
 // 提前 5 分钟刷新临时凭证，避免边界过期
@@ -78,7 +78,7 @@ class HuaweiCloudClient {
   /**
    * 从华为云 APIG 域名中提取区域。
    * 域名格式：{instance}.{product}.{region}.huaweicloudapis.com
-   * 如 c1231bf9a6884b7bb413e56abaa671c0.apic.cn-southwest-2.huaweicloudapis.com
+   * 如 242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com
    * @param {string} host APIG 域名
    * @returns {string} 区域标识，如 cn-southwest-2
    */
