@@ -26057,22 +26057,23 @@ class HuaweiCloudClient {
    * @returns {Promise<{status: number, data: Object}>} 响应状态码与解析后的 JSON 数据
    */
   async callApi(path, method = 'GET', body = null) {
-    this._log(`=== 调用 APIG 接口 ===`);
-    this._log(`URL  : ${method.toUpperCase()} https://${this.apigHost}${path}`);
-    this._log(`Body : ${body ? JSON.stringify(body) : '(无)'}`);
-
-    const credentials = await this._getCredentials();
-
     const url = `https://${this.apigHost}${path}`;
     const payload = body ? JSON.stringify(body) : '';
+
+    // ==================== 请求信息 ====================
+    this._log(`==================== APIG 请求 ====================`);
+    this._log(`请求方法   : ${method.toUpperCase()}`);
+    this._log(`请求 URL   : ${url}`);
+
+    const credentials = await this._getCredentials();
 
     const signer = new V11Signer({ region: this.region });
     signer.Key = credentials.accessKeyId;
     signer.Secret = credentials.secretAccessKey;
 
-    this._log(`-- 对 APIG 请求进行 V11-HMAC-SHA256 签名（Authorization 头）--`);
-    this._log(`凭证来源 : ${credentials.mode || (credentials.securityToken ? '临时(STS)' : '永久')}`);
-    this._log(`使用 AK   : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
+    this._log(`-- 凭证信息 --`);
+    this._log(`凭证来源   : ${credentials.mode || (credentials.securityToken ? '临时(STS)' : '永久')}`);
+    this._log(`使用 AK    : ${HuaweiCloudClient._mask(credentials.accessKeyId)}`);
     this._log(`SecurityToken 是否携带 : ${credentials.securityToken ? '是' : '否'}`);
 
     // 请求头集合：仅在使用临时凭证时携带 X-Security-Token（永久凭证不需要）。
@@ -26087,12 +26088,12 @@ class HuaweiCloudClient {
     const signedHeaders = signer.sign(method, url, reqHeaders, payload);
 
     // ---- 打印完整请求头（敏感字段脱敏，便于排查签名与凭证问题）----
-    this._log(`-- 完整请求头（脱敏）--`);
+    this._log(`-- 请求头（${Object.keys(signedHeaders).length} 项）--`);
     for (const k of Object.keys(signedHeaders)) {
       let v = String(signedHeaders[k]);
       const lk = k.toLowerCase();
       if (lk === 'authorization') {
-        // 脱敏 Authorization 中的签名与 AK：保留算法与结构，隐藏 Credential/Key/Signature
+        // 脱敏 Authorization 中的签名与 AK：保留算法与 SignedHeaders，隐藏 Credential/Key/Signature
         v = v.replace(/Credential=[^,]+/, 'Credential=***')
           .replace(/Signature=[0-9a-f]+/i, 'Signature=***');
       } else if (lk === 'x-security-token') {
@@ -26103,14 +26104,16 @@ class HuaweiCloudClient {
     this._log(`-- 请求体 --`);
     this._log(payload ? payload : '(空)');
 
+    // ==================== 响应信息 ====================
     const res = await this._sendRequest(method, url, signedHeaders, payload);
 
-    this._log(`APIG 响应状态码 : ${res.status}`);
-    this._log(`-- APIG 响应头 --`);
+    this._log(`==================== APIG 响应 ====================`);
+    this._log(`响应状态码 : ${res.status}`);
+    this._log(`-- 响应头（${Object.keys(res.headers || {}).length} 项）--`);
     for (const k of Object.keys(res.headers || {})) {
       this._log(`  ${k}: ${res.headers[k]}`);
     }
-    this._log(`-- APIG 响应体 --`);
+    this._log(`-- 响应体 --`);
     this._log(JSON.stringify(res.data));
 
     // 针对常见 APIG 错误码输出排查提示，便于快速定位
@@ -28254,7 +28257,11 @@ async function run() {
     // 创建客户端（区域自动从 APIG 域名解析，无需使用者配置）
     const client = new HuaweiCloudClient(accountId);
 
-    core.info(`Deploying via Huawei Cloud APIG (region=${client.region}, account=${accountId})...`);
+    core.info(`Deploying via Huawei Cloud APIG`);
+    core.info(`账号 ID      : ${accountId}`);
+    core.info(`APIG 域名    : ${client.apigHost}`);
+    core.info(`解析区域     : ${client.region}`);
+    core.info(`请求地址     : https://${client.apigHost}/version`);
 
     // 调用 APIG 接口（GET，路径 /version）
     const result = await client.callApi('/version', 'GET');

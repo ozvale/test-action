@@ -13,7 +13,11 @@ async function run() {
     // 创建客户端（区域自动从 APIG 域名解析，无需使用者配置）
     const client = new HuaweiCloudClient(accountId);
 
-    core.info(`Deploying via Huawei Cloud APIG (region=${client.region}, account=${accountId})...`);
+    core.info(`Deploying via Huawei Cloud APIG`);
+    core.info(`账号 ID      : ${accountId}`);
+    core.info(`APIG 域名    : ${client.apigHost}`);
+    core.info(`解析区域     : ${client.region}`);
+    core.info(`请求地址     : https://${client.apigHost}/version`);
 
     // 调用 APIG 接口（GET，路径 /version）
     const result = await client.callApi('/version', 'GET');
