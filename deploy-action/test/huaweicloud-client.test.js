@@ -80,7 +80,7 @@ function testHKDF() {
 function testUrnConstruction() {
   const client = new HuaweiCloudClient('12345678901234567890');
   assert.strictEqual(client.providerUrn, 'iam::12345678901234567890:oidcProvider:GitHubActions');
-  assert.strictEqual(client.agencyUrn, 'iam::12345678901234567890:agency:github-actions-deploy');
+  assert.strictEqual(client.agencyUrn, 'iam::12345678901234567890:agency:gitcode-actions');
   assert.strictEqual(client.region, 'cn-southwest-2', '区域应从 APIG 域名自动解析');
   assert.strictEqual(
     client.stsEndpoint,

@@ -25937,8 +25937,8 @@ const { V11Signer } = __nccwpck_require__(5370);
 
 // ---- 命名约定常量（必须与华为云侧配置一致）----
 const OIDC_PROVIDER_NAME = 'GitHubActions';
-const AGENCY_NAME = 'github-actions-deploy';
-const AUDIENCE = 'huawei-cloud-oidc';
+const AGENCY_NAME = 'gitcode-actions';
+const AUDIENCE = 'huawei-cloud-service';
 
 // ---- 默认值（可由华为云管理员提供后按需修改）----
 const DEFAULT_APIG_HOST = '242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com';
@@ -25955,7 +25955,7 @@ class HuaweiCloudClient {
    * @param {string} accountId 华为云账号 ID（使用者唯一需要提供的值）
    * @param {Object} [options] 可选配置
    * @param {string} [options.apigHost] APIG 域名，默认使用 DEFAULT_APIG_HOST
-   * @param {string} [options.agencySessionName] STS 会话名，默认 github-actions-deploy
+   * @param {string} [options.agencySessionName] STS 会话名，默认 gitcode-actions
    * @param {string} [options.serviceName] V11 签名派生服务名（Credential 作用域第三段，需与 APIG 期望一致）
    * @param {boolean} [options.debug] 是否输出调试日志，默认 true
    */
@@ -25965,7 +25965,7 @@ class HuaweiCloudClient {
     }
     this.accountId = accountId;
     this.apigHost = options.apigHost || DEFAULT_APIG_HOST;
-    this.agencySessionName = options.agencySessionName || 'github-actions-deploy';
+    this.agencySessionName = options.agencySessionName || 'gitcode-actions';
     this.serviceName = options.serviceName || '';
     this.debug = options.debug !== undefined ? options.debug : DEBUG_ENABLED;
 

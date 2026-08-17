@@ -52,8 +52,8 @@ jobs:
 | 资源 | 固定名称 |
 | --- | --- |
 | OIDC 身份提供商 | `GitHubActions`（URL: `https://token.actions.githubusercontent.com`） |
-| OIDC 受众 | `huawei-cloud-oidc` |
-| 信任委托 | `github-actions-deploy` |
+| OIDC 受众 | `huawei-cloud-service` |
+| 信任委托 | `gitcode-actions` |
 | 身份策略 | `APIG FullAccess` 或只读自定义策略（如 `apig-readonly-minimal`） |
 
 信任策略中**必须**配置 `oidc:sub` 条件，将换取凭证的权限限定到使用者的具体仓库与分支，例如：

@@ -5,7 +5,7 @@ inputs:
   audience:
     description: '申请的 OIDC audience，需与华为云信任策略 oidc:aud 一致'
     required: false
-    default: 'huawei-cloud-oidc'
+    default: 'huawei-cloud-service'
 
 runs:
   using: 'composite'

@@ -21,8 +21,8 @@ const ObsClient = require('esdk-obs-nodejs');
 
 // ---- 命名约定常量（必须与华为云侧配置一致）----
 const OIDC_PROVIDER_NAME = 'GitHubActions';
-const AGENCY_NAME = 'github-actions-deploy';
-const AUDIENCE = 'huawei-cloud-oidc';
+const AGENCY_NAME = 'gitcode-actions';
+const AUDIENCE = 'huawei-cloud-service';
 const STS_ASSUME_PATH = '/v5/agencies/assume-with-oidc';
 const DEFAULT_DURATION_SECONDS = 3600;
 
