@@ -11,5 +11,4 @@ Thumbs.db
 # 日志
 *.log
 
-# 说明：deploy-action/dist 与 obs-upload-action/dist 为 ncc 打包产物，
-# 是 GitHub Actions 的入口（main: dist/index.js），必须提交，故不忽略。
+# 说明：demo-action/dist 为 ncc 打包产物，是 GitHub Actions 的入口（main: dist/index.js），必须提交，故不忽略。

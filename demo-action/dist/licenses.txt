@@ -487,6 +487,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
+openlibing-client
+MIT
+
 rfdc
 MIT
 Copyright 2019 "David Mark Clements <david.mark.clements@gmail.com>"

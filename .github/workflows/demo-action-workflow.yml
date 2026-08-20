@@ -1,0 +1,25 @@
+name: Demo Action Workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+# 必须声明此权限，否则无法申请 OIDC JWT（这不是 secret，是 GitHub 的权限声明）
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  demo:
+    name: 演示 openlibing-client SDK（OIDC 上传 OBS + 调用 APIG）
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码（含 README.md）
+        uses: actions/checkout@v4
+
+      - name: 运行 demo-action（基于 OIDC 免认证上传根目录 README.md 到 OBS，并调用 APIG）
+        uses: ./demo-action
+        with:
+          file-path: ./README.md

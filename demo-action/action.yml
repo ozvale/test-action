@@ -1,0 +1,11 @@
+name: 'Openlibing Demo Action'
+description: '演示 openlibing-client SDK：基于 OIDC 免认证上传 OBS 并调用 APIG（上传 checkout 出的根目录 README.md）'
+
+inputs:
+  file-path:
+    description: '待上传文件路径（如 ./README.md），上传到 OBS 桶 openlibing-gitcode-action 的 oidc-demo-action/<文件名>'
+    required: true
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
