@@ -11,4 +11,6 @@ Thumbs.db
 # 日志
 *.log
 
-# 说明：demo-action/dist 为 ncc 打包产物，是 GitHub Actions 的入口（main: dist/index.js），必须提交，故不忽略。
+# 说明：.github/actions/demo-action/dist 为 ncc 打包产物，是该 Action 的入口（main: dist/index.js），必须提交，故不忽略。
+# 说明：npm pack 产物（*.tgz）不提交。
+*.tgz

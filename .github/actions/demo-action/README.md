@@ -1,6 +1,6 @@
-# demo-action：openlibing-client SDK 使用示例（GitHub Action）
+# demo-action：openlibing-client SDK 使用示例（本地自定义 Action）
 
-`demo-action` 是基于 `openlibing-client` SDK 的完整示例 Action，演示两个核心场景：
+`demo-action` 是基于 `openlibing-client` SDK 的本地自定义 Action（位于 `.github/actions/demo-action`，通过 `uses: ./.github/actions/demo-action` 引用），演示两个核心场景：
 
 1. **OIDC 免认证上传 OBS**：SDK `getCredentials()` 换取华为云临时凭证 -> `esdk-obs-nodejs` 的 `putObject()` 上传文件。
 2. **OIDC 免认证调用 APIG**：SDK `getCredentials()` 换证 -> `V11Signer` 生成 APIG V11-HMAC-SHA256 签名（含 `X-Security-Token`）-> `sendRequest()` 调用 APIG 接口。
@@ -66,15 +66,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 运行 demo-action（OIDC 上传 OBS + 调用 APIG）
-        uses: ./demo-action
+        uses: ./.github/actions/demo-action
         with:
           file-path: ./README.md
 ```
 
 ## 本地开发
 
+demo-action 不直接引用仓库源码，而是安装根目录 `npm pack` 构建出的单个包（`package.json` 中 `"openlibing-client": "file:../../../openlibing-client-1.0.0.tgz"`）：
+
 ```bash
+# 1. 根目录构建 SDK 单个包（产出 openlibing-client-1.0.0.tgz）
+cd <项目根目录> && npm run build
+
+# 2. 安装（file: tarball）并测试
 npm install
 npm test      # 运行测试（拦截 STS/APIG 请求 + 注入 FakeObsClient）
-npm run build # 使用 ncc 将 SDK 与 esdk-obs-nodejs 内联进 dist/
+npm run build # 使用 ncc 将 openlibing-client 包与 esdk-obs-nodejs 内联进 dist/
 ```
+
+注意：SDK 版本升级后，需重新执行根目录 `npm run build`，并同步更新 `package.json` 中 `file:` 路径里的版本号。

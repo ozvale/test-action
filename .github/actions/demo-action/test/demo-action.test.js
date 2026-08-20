@@ -23,10 +23,17 @@ const { EventEmitter } = require('events');
 
 const APIG_HOST = '242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com';
 
-/** 清空插件与 SDK 模块缓存，隔离各用例的凭证缓存与模块状态。 */
+// SDK 来自安装的构建产物包（file: tarball），清缓存需覆盖该包全部模块
+const SDK_DIR = path.resolve(__dirname, '../node_modules/openlibing-client');
+
+/** 清空插件与 SDK（node_modules/openlibing-client 包全部模块）缓存，隔离各用例的凭证缓存与模块状态。 */
 function freshModules() {
   delete require.cache[require.resolve('../index.js')];
-  delete require.cache[require.resolve('../../sdk/openlibing-client')];
+  for (const key of Object.keys(require.cache)) {
+    if (key.startsWith(SDK_DIR)) {
+      delete require.cache[key];
+    }
+  }
 }
 
 /**

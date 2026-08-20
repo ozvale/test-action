@@ -20,6 +20,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 运行 demo-action（基于 OIDC 免认证上传根目录 README.md 到 OBS，并调用 APIG）
-        uses: ./demo-action
+        uses: ./.github/actions/demo-action
         with:
           file-path: ./README.md

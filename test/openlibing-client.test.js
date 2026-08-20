@@ -20,14 +20,20 @@
 
 const assert = require('assert');
 const https = require('https');
+const path = require('path');
 const { EventEmitter } = require('events');
 
-const LIB_PATH = '../openlibing-client';
+const LIB_PATH = '../src';
+const SRC_DIR = path.resolve(__dirname, '../src');
 const ACCOUNT_ID = '4d29a984c4fe4e6eb5d404a853d0084e';
 
-/** 重新加载 SDK，清空模块级凭证缓存（_credentials / _credentialPromise）。 */
+/** 重新加载 SDK：清空 src 下全部模块缓存，重置模块级配置（cfg）与凭证缓存（_credentials / _credentialPromise）。 */
 function freshClient() {
-  delete require.cache[require.resolve(LIB_PATH)];
+  for (const key of Object.keys(require.cache)) {
+    if (key.startsWith(SRC_DIR)) {
+      delete require.cache[key];
+    }
+  }
   return require(LIB_PATH);
 }
 

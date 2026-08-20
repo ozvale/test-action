@@ -6,7 +6,7 @@
 
 当前仓库包含共享薄库（`shared/huaweicloud-openlibing-client.js` + `shared/signer-v11.js`）与两个独立插件（`deploy-action` 调用 APIG、`obs-upload-action` 上传 OBS），以及临时调试残留（`inspect-oidc-action`）。目标（用户多轮确认后收敛）：
 
-- 将仓库重构为「**openlibing-client SDK + example**」项目：`sdk/` 提供通用基础能力，一个 `demo-action` 作为使用 SDK 的完整示例。
+- 将仓库重构为「**openlibing-client SDK（npm 包）+ 本地自定义 Action 示例**」项目：`src/` 按功能拆分为多模块提供通用基础能力，支持构建发布为 npm 包 `openlibing-client`；`.github/actions/demo-action` 作为使用 SDK 的本地自定义 Action 示例。
 - SDK 只封装**通用基础能力**（OIDC 换证、APIG V11 签名、HTTPS 请求工具、配置与缓存管理），**不封装业务编排**（`callApig` / `uploadToObs` 等因方法多变不直接封装）。
 - `demo-action` 合并原两个插件的演示能力，核心流程：**OIDC 免认证上传 checkout 出的根目录 `README.md` 到 OBS -> OIDC 免认证调用 APIG**，并通过 workflow 呈现。
 
@@ -20,32 +20,44 @@
 ## 目标文件结构
 
 ```
-test-action/
-├── sdk/
-│   ├── openlibing-client.js            # SDK：OIDC 认证 + V11 签名 + HTTPS 请求工具（自包含）
-│   ├── package.json
-│   └── test/
-│       └── openlibing-client.test.js   # SDK 测试
-├── demo-action/                        # example：核心流程演示
-│   ├── action.yml
-│   ├── index.js                        # 上传 file-path 指定文件 -> 调用 APIG
-│   ├── package.json
-│   ├── test/
-│   │   └── demo-action.test.js
-│   ├── README.md
-│   └── dist/                           # ncc 编译产物
-├── .github/workflows/
-│   └── demo-action-workflow.yml        # 演示 workflow
-├── README.md                           # SDK + demo-action 项目说明
+openlibing-client/                       # 项目根 = openlibing-client npm 包
+├── src/                                 # SDK 源码（包主体，files 字段仅打包 src/）
+│   ├── index.js                         # 包入口：导出 getCredentials / configure / V11Signer / sendRequest
+│   ├── config.js                        # 内置 openlibing 配置 + configure()（模块级单例 cfg）
+│   ├── logger.js                        # 调试日志（debug 开关）+ 敏感字段脱敏工具
+│   ├── http.js                          # sendRequest HTTPS 请求工具（调试日志）
+│   ├── oidc.js                          # GitHub OIDC ID Token 申请
+│   ├── credentials.js                   # getCredentials：OIDC -> STS 换证（缓存/force/并发去重）
+│   └── signer-v11.js                    # V11Signer：APIG V11-HMAC-SHA256 签名器
+├── test/
+│   └── openlibing-client.test.js        # SDK 测试
+├── .github/
+│   ├── actions/
+│   │   └── demo-action/                 # 本地自定义 Action（example）
+│   │       ├── action.yml
+│   │       ├── index.js                 # 上传 file-path 指定文件 -> 调用 APIG
+│   │       ├── package.json
+│   │       ├── test/
+│   │       │   └── demo-action.test.js
+│   │       ├── README.md
+│   │       └── dist/                    # ncc 编译产物（内联 src/ SDK 与 esdk-obs-nodejs）
+│   └── workflows/
+│       └── demo-action-workflow.yml     # 演示 workflow（uses: ./.github/actions/demo-action）
+├── package.json                         # npm 包定义（main: src/index.js）
+├── README.md
 └── docs/superpowers/specs/
     └── 2026-08-20-openlibing-client-sdk-design.md
 ```
 
-删除：`deploy-action/`、`obs-upload-action/`、`inspect-oidc-action/`、`shared/`（含 `huaweicloud-openlibing-client.js`、`signer-v11.js`）。
+模块依赖方向（无循环）：`config <- logger <- http <- oidc <- credentials`；`signer-v11` 仅依赖 `crypto`，独立。
 
-## SDK API 契约（sdk/openlibing-client.js）
+删除：`deploy-action/`、`obs-upload-action/`、`inspect-oidc-action/`、`shared/`、旧 `sdk/`（单文件版已拆分并入 `src/`）。
 
-自包含单文件模块，仅依赖 Node 内置 `https` / `crypto` / `url`，不依赖 `@actions/core`；日志降级为 `console.log`（含脱敏 `mask`）。
+demo-action 对 SDK 的引用方式：**引构建后的单个包**，不直接引用 `src/` 源码——根目录 `npm run build`（`npm pack`）产出 `openlibing-client-x.y.z.tgz`，demo-action `package.json` 声明 `"openlibing-client": "file:../../../openlibing-client-1.0.0.tgz"`，代码 `require('openlibing-client')`，ncc 构建时将安装的包内联进 dist（版本升级需重新 pack 并同步 `file:` 路径版本号）。
+
+## SDK API 契约（src/，入口 index.js）
+
+`src/` 多模块，仅依赖 Node 内置 `https` / `crypto` / `url`，不依赖 `@actions/core`；日志降级为 `console.log`（含脱敏 `mask`）。对外 API 由 `src/index.js` 统一导出，包 `main` 指向 `src/index.js`，`npm pack` 仅打包 `src/`。
 
 ### 导出
 
@@ -130,7 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 运行 demo-action（OIDC 上传 OBS + 调用 APIG）
-        uses: ./demo-action
+        uses: ./.github/actions/demo-action
         with:
           file-path: ./README.md
 ```
@@ -139,23 +151,25 @@ jobs:
 
 | 目录 | 测试内容 |
 | --- | --- |
-| `sdk/test/openlibing-client.test.js` | 模块导出；内置 openlibing 配置（含 debug 默认关闭）；OIDC->STS 完整链路（环境变量覆盖 / Actions 自申请）；缓存复用；force 刷新；并发去重；configure 覆盖；V11Signer 签名格式（Credential 四段/SignedHeaders/Signature）；sendRequest 解析；调试模式（默认静默 / 开启后打印关键步骤与 STS 请求响应详情且凭证脱敏）；sendRequest 返回响应头与 Authorization/JWT 脱敏 |
-| `demo-action/test/demo-action.test.js` | 全流程：读取 file-path 文件 -> OBS 上传（注入 FakeObsClient + 拦截 STS）-> APIG 调用（拦截 HTTPS）；执行步骤与第三方接口请求/响应日志（stdout 捕获断言）与敏感字段脱敏；文件缺失校验；OBS 失败分支；APIG 非 2xx 分支 |
+| `test/openlibing-client.test.js` | 模块导出；内置 openlibing 配置（含 debug 默认关闭）；OIDC->STS 完整链路（环境变量覆盖 / Actions 自申请）；缓存复用；force 刷新；并发去重；configure 覆盖；V11Signer 签名格式（Credential 四段/SignedHeaders/Signature）；sendRequest 解析；调试模式（默认静默 / 开启后打印关键步骤与 STS 请求响应详情且凭证脱敏）；sendRequest 返回响应头与 Authorization/JWT 脱敏 |
+| `.github/actions/demo-action/test/demo-action.test.js` | 全流程：读取 file-path 文件 -> OBS 上传（注入 FakeObsClient + 拦截 STS）-> APIG 调用（拦截 HTTPS）；执行步骤与第三方接口请求/响应日志（stdout 捕获断言）与敏感字段脱敏；文件缺失校验；OBS 失败分支；APIG 非 2xx 分支 |
 
 - 测试沿用现有拦截器模式：先回调挂监听再异步触发 `data`/`end`，避免 promise 永不 resolve 的假通过。
-- `sdk` 测试与 `demo-action` 测试均通过 `require.cache` 清理隔离模块级凭证缓存。
+- SDK 测试与 `demo-action` 测试均通过 `require.cache` 清理隔离模块级配置与凭证缓存（SDK 测试按 `src/` 目录前缀清理全部子模块）。
 
 ## 文件变更清单
 
-- 新建：`sdk/openlibing-client.js`、`sdk/package.json`、`sdk/test/openlibing-client.test.js`
-- 新建：`demo-action/index.js`（读取 file-path -> 上传 OBS -> 调用 APIG）、`demo-action/action.yml`、`demo-action/package.json`、`demo-action/test/demo-action.test.js`、`demo-action/README.md`（workflow 传入 `./README.md`，直接上传 checkout 出的根目录文件）
+- 新建：`src/index.js`、`src/config.js`、`src/logger.js`、`src/http.js`、`src/oidc.js`、`src/credentials.js`、`src/signer-v11.js`（由单文件 `sdk/openlibing-client.js` 按功能拆分而来）
+- 新建：根 `package.json`（openlibing-client npm 包定义：`main: src/index.js`、`files: ["src"]`、test/build 脚本）、`test/openlibing-client.test.js`
+- 迁移：`demo-action/` -> `.github/actions/demo-action/`（本地自定义 Action，workflow 以 `./.github/actions/demo-action` 引用）
 - 新建：`.github/workflows/demo-action-workflow.yml`
-- 重写：根 `README.md`
-- 删除：`deploy-action/`、`obs-upload-action/`、`inspect-oidc-action/`、`shared/huaweicloud-openlibing-client.js`、`shared/signer-v11.js`（`shared/` 目录整体移除，`sdk/` 替代）
-- 打包：`demo-action/dist`（ncc 编译）
+- 重写：根 `README.md`、`.github/actions/demo-action/README.md`
+- 删除：`deploy-action/`、`obs-upload-action/`、`inspect-oidc-action/`、`shared/`、`sdk/`（单文件版拆分并入 `src/`）
+- 打包：`.github/actions/demo-action/dist`（ncc 编译，内联 `node_modules/openlibing-client` 与 `esdk-obs-nodejs`）
 
 ## 验证方式
 
-- `sdk` 与 `demo-action` 两套测试全部通过。
-- `demo-action` `npm run build` 成功；dist 内联 `esdk-obs-nodejs` 与 SDK 源码。
-- Grep 确认仓库无 `shared/`、`deploy-action/`、`obs-upload-action/`、`inspect-oidc-action/`、`signer-v11`、`huaweicloud-openlibing-client` 残留引用。
+- 根目录 `npm test`（SDK 12 项）与 `.github/actions/demo-action` `npm test`（4 项）全部通过。
+- 根目录 `npm run build`（`npm pack`）产出单个包 `openlibing-client-1.0.0.tgz`；demo-action `npm install` 后 `require('openlibing-client')` 可解析。
+- `demo-action` `npm run build` 成功；dist 内联 `esdk-obs-nodejs` 与安装的 `openlibing-client` 包，且无对 `src/` 的相对路径运行时依赖。
+- Grep 确认仓库无 `shared/`、`sdk/`、旧目录残留引用。

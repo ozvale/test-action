@@ -19,9 +19,10 @@
 const core = require('@actions/core');
 const fs = require('fs');
 const path = require('path');
-// 顶层静态 require，ncc 打包时会内联整个 OBS SDK 进 dist
+// 顶层静态 require，ncc 打包时会内联整个 OBS SDK 与构建产物 openlibing-client 包进 dist
+// openlibing-client 来自根目录 npm pack 出的 tarball（file:../../../openlibing-client-1.0.0.tgz）
 const ObsClient = require('esdk-obs-nodejs');
-const { getCredentials, configure, V11Signer, sendRequest } = require('../sdk/openlibing-client');
+const { getCredentials, configure, V11Signer, sendRequest } = require('openlibing-client');
 
 // 演示用内置默认值（openlibing 平台示例资源）
 const DEMO_CONFIG = {
