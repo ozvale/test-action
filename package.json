@@ -1,7 +1,7 @@
 {
-  "name": "openlibing-client",
+  "name": "@openlibing/huaweicloud-oidc-client",
   "version": "1.0.0",
-  "description": "openlibing 平台与华为云交互 SDK：OIDC 认证获取临时凭证、APIG V11-HMAC-SHA256 签名、HTTPS 请求工具，零第三方依赖",
+  "description": "openlibing 平台与华为云交互 SDK：OIDC 认证获取临时凭证、APIG V11-HMAC-SHA256 签名、HTTPS 请求工具（基于 Node 内置 fetch）",
   "main": "src/index.js",
   "files": [
     "src"
@@ -20,7 +20,15 @@
     "gitcode"
   ],
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozvale/test-action.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ozvale/test-action/issues"
+  },
+  "homepage": "https://github.com/ozvale/test-action",
   "license": "MIT"
 }

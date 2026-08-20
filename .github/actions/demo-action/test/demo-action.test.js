@@ -15,18 +15,16 @@
  */
 
 const assert = require('assert');
-const https = require('https');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { EventEmitter } = require('events');
 
 const APIG_HOST = '242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com';
 
 // SDK 来自安装的构建产物包（file: tarball），清缓存需覆盖该包全部模块
-const SDK_DIR = path.resolve(__dirname, '../node_modules/openlibing-client');
+const SDK_DIR = path.resolve(__dirname, '../node_modules/@openlibing/huaweicloud-oidc-client');
 
-/** 清空插件与 SDK（node_modules/openlibing-client 包全部模块）缓存，隔离各用例的凭证缓存与模块状态。 */
+/** 清空插件与 SDK（node_modules/@openlibing/huaweicloud-oidc-client 包全部模块）缓存，隔离各用例的凭证缓存与模块状态。 */
 function freshModules() {
   delete require.cache[require.resolve('../index.js')];
   for (const key of Object.keys(require.cache)) {
@@ -37,49 +35,41 @@ function freshModules() {
 }
 
 /**
- * 拦截 https.request：按 hostname 路由响应，记录请求与请求体。
+ * 拦截 globalThis.fetch：按 URL 路由响应，记录请求与请求体。
  * routeResponse(record) 可返回 { statusCode, body } 或直接返回 body（默认 200）。
  */
 function installRequestInterceptor(routeResponse) {
   const records = [];
-  const origRequest = https.request;
-  https.request = function (options, cb) {
-    const writes = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async function (url, init = {}) {
+    const parsed = new URL(url);
     const record = {
-      options,
-      headers: options.headers,
-      hostname: options.hostname,
-      path: options.path,
-      method: options.method,
-      url: `https://${options.hostname}${options.path}`,
-      writes
+      url: url.toString(),
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: init.method || 'GET',
+      headers: init.headers || {},
+      body: init.body || ''
     };
     records.push(record);
 
-    const res = new EventEmitter();
-    res.statusCode = 200;
-    res.headers = { 'content-type': 'application/json' };
-    // 必须先调用回调挂上 data/end 监听器，再异步触发，否则 sendRequest 的 promise 不会 resolve
-    if (typeof cb === 'function') {
-      cb(res);
+    const r = routeResponse(record);
+    let statusCode = 200;
+    let body = r;
+    if (r && typeof r === 'object' && 'statusCode' in r) {
+      statusCode = r.statusCode;
+      body = r.body;
     }
-    process.nextTick(() => {
-      const r = routeResponse(record);
-      let body = r;
-      if (r && typeof r === 'object' && 'statusCode' in r) {
-        res.statusCode = r.statusCode;
-        body = r.body;
-      }
-      if (body !== null && body !== undefined) {
-        res.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)));
-      }
-      res.emit('end');
-    });
-    return { on() {}, write(b) { writes.push(Buffer.isBuffer(b) ? b.toString('utf8') : String(b)); }, end() {} };
+    const raw = body === null || body === undefined ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
+    return {
+      status: statusCode,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () => raw
+    };
   };
   return {
     records,
-    restore() { https.request = origRequest; }
+    restore() { globalThis.fetch = origFetch; }
   };
 }
 

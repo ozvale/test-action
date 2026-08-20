@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * demo-action：openlibing-client SDK 的使用示例（GitHub Action）
+ * demo-action：@openlibing/huaweicloud-oidc-client SDK 的使用示例（GitHub Action）
  *
  * 核心流程（每步均打印执行日志，第三方接口调用打印完整请求/响应，敏感字段脱敏）：
  *   1. 读取前一个 step 生成的文件（输入 file-path，必填）
@@ -19,10 +19,9 @@
 const core = require('@actions/core');
 const fs = require('fs');
 const path = require('path');
-// 顶层静态 require，ncc 打包时会内联整个 OBS SDK 与构建产物 openlibing-client 包进 dist
-// openlibing-client 来自根目录 npm pack 出的 tarball（file:../../../openlibing-client-1.0.0.tgz）
+// 顶层静态 require，ncc 打包时会内联整个 OBS SDK 与构建产物 @openlibing/huaweicloud-oidc-client 包进 dist
 const ObsClient = require('esdk-obs-nodejs');
-const { getCredentials, configure, V11Signer, sendRequest } = require('openlibing-client');
+const { getCredentials, configure, V11Signer, sendRequest } = require('@openlibing/huaweicloud-oidc-client');
 
 // 演示用内置默认值（openlibing 平台示例资源）
 const DEMO_CONFIG = {

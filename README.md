@@ -1,16 +1,16 @@
-# openlibing-client
+# @openlibing/huaweicloud-oidc-client
 
 一个以 **构建 npm 包** 为目标的 SDK 项目：`src/` 提供 openlibing 平台对接华为云的通用基础能力（OIDC 认证、APIG V11 签名、HTTPS 请求工具），`.github/actions/demo-action` 是基于该 SDK 的自定义 Action 插件（本地 composite 示例），通过 workflow 演示「基于 OIDC 免 AK/SK 上传 OBS + 调用 APIG」的完整链路。
 
 ## 目录结构
 
 ```
-openlibing-client/
-├── src/                                 # SDK 源码（npm 包主体，仅依赖 Node 内置模块）
+test-action/
+├── src/                                 # SDK 源码（npm 包主体，HTTP 层基于 Node 内置 fetch）
 │   ├── index.js                         # 包入口：导出 getCredentials / configure / V11Signer / sendRequest
 │   ├── config.js                        # 内置 openlibing 配置 + configure() 覆盖（模块级单例 cfg）
 │   ├── logger.js                        # 调试日志（debug 开关）+ 敏感字段脱敏工具
-│   ├── http.js                          # sendRequest HTTPS 请求工具（调试模式打印请求/响应详情）
+│   ├── http.js                          # sendRequest 请求工具（基于 Node 内置 fetch，调试模式打印请求/响应详情）
 │   ├── oidc.js                          # GitHub OIDC ID Token 申请（环境变量覆盖 / Actions 自申请）
 │   ├── credentials.js                   # getCredentials：OIDC -> STS 换证（缓存 / force / 并发去重）
 │   └── signer-v11.js                    # V11Signer：APIG V11-HMAC-SHA256 签名器
@@ -24,10 +24,10 @@ openlibing-client/
 │   │       ├── test/
 │   │       │   └── demo-action.test.js  # demo-action 测试
 │   │       ├── README.md                # demo-action 使用说明
-│   │       └── dist/                    # ncc 编译产物（内联 openlibing-client 包与 esdk-obs-nodejs）
+│   │       └── dist/                    # ncc 编译产物（内联 @openlibing/huaweicloud-oidc-client 包与 esdk-obs-nodejs）
 │   └── workflows/
 │       └── demo-action-workflow.yml     # 演示 workflow
-├── package.json                         # openlibing-client npm 包定义（main: src/index.js）
+├── package.json                         # @openlibing/huaweicloud-oidc-client npm 包定义（main: src/index.js）
 ├── README.md
 └── docs/superpowers/specs/
     └── 2026-08-20-openlibing-client-sdk-design.md   # 设计文档
@@ -36,11 +36,11 @@ openlibing-client/
 ## 安装与使用
 
 ```bash
-npm install openlibing-client
+npm install @openlibing/huaweicloud-oidc-client
 ```
 
 ```js
-const openlibing = require('openlibing-client');
+const openlibing = require('@openlibing/huaweicloud-oidc-client');
 
 // 调试模式：默认静默；开启后打印关键步骤与每次 HTTP 请求/响应日志（敏感字段自动脱敏）
 openlibing.configure({ debug: true });
@@ -63,7 +63,7 @@ const res = await openlibing.sendRequest('GET', 'https://{apig-host}/v1/export',
 // => { status, headers, data }
 ```
 
-SDK 仅依赖 Node 内置模块（`https` / `crypto` / `url`），不依赖 `@actions/core`，任意 Node 环境均可独立使用。
+SDK 的 HTTP 层基于 Node 内置 `fetch`（Node 18+），零第三方运行时依赖，不依赖 `@actions/core`，任意 Node 18+ 环境均可独立使用。
 
 导出的核心接口：
 
@@ -86,13 +86,13 @@ SDK 默认静默，`configure({ debug: true })` 开启调试模式后打印关�
 
 ```bash
 npm test          # 运行 SDK 测试
-npm run build     # npm pack，产出单个包 openlibing-client-x.y.z.tgz（仅打包 src/）
+npm run build     # npm pack，产出单个包 openlibing-huaweicloud-oidc-client-x.y.z.tgz（仅打包 src/）
 npm publish       # 发布（files 字段限定仅含 src/）
 ```
 
 ## 自定义插件：.github/actions/demo-action
 
-`demo-action` 是位于 `.github/actions/` 的本地自定义 Action（基于 SDK 的完整示例），以真实使用方的方式引用 SDK：通过 `file:` 依赖安装根目录 `npm pack` 构建出的单个包（`"openlibing-client": "file:../../../openlibing-client-1.0.0.tgz"`），代码中 `require('openlibing-client')`，ncc 构建时将安装的包内联进 dist。SDK 版本升级后需在根目录重新 `npm run build` 并同步更新该 `file:` 路径中的版本号。
+`demo-action` 是位于 `.github/actions/` 的本地自定义 Action（基于 SDK 的完整示例），以真实使用方的方式引用 SDK：通过 `file:` 依赖安装根目录 `npm pack` 构建出的单个包（`"@openlibing/huaweicloud-oidc-client": "file:../../../openlibing-huaweicloud-oidc-client-1.0.0.tgz"`），代码中 `require('@openlibing/huaweicloud-oidc-client')`，ncc 构建时将安装的包内联进 dist。SDK 版本升级后需在根目录重新 `npm run build` 并同步更新该 `file:` 路径中的版本号。
 
 1. **OIDC 免认证上传 OBS**：`getCredentials()` 换取临时凭证 -> `new ObsClient({ ...临时凭证, server })` -> `putObject()`。
 2. **OIDC 免认证调用 APIG**：`getCredentials()` 换证 -> `V11Signer` 签名（含 `X-Security-Token`）-> `sendRequest()` 调用 APIG 接口。
@@ -130,7 +130,7 @@ jobs:
 npm test
 
 # 构建 SDK 单个包并运行 demo-action 测试
-npm run build                                         # 根目录产出 openlibing-client-1.0.0.tgz
+npm run build                                         # 根目录产出 openlibing-huaweicloud-oidc-client-1.0.0.tgz
 cd .github/actions/demo-action && npm install && npm test
 
 # 重建 demo-action 的 ncc 产物

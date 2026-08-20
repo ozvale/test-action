@@ -1,5 +1,5 @@
 name: 'Openlibing Demo Action'
-description: '演示 openlibing-client SDK：基于 OIDC 免认证上传 OBS 并调用 APIG（上传 checkout 出的根目录 README.md）'
+description: '演示 @openlibing/huaweicloud-oidc-client SDK：基于 OIDC 免认证上传 OBS 并调用 APIG（上传 checkout 出的根目录 README.md）'
 
 inputs:
   file-path:

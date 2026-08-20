@@ -1,7 +1,7 @@
 {
   "name": "demo-action",
   "version": "1.0.0",
-  "description": "演示 openlibing-client SDK 的 GitHub Action：基于 OIDC 免认证上传 checkout 出的根目录 README.md 到 OBS 并调用 APIG",
+  "description": "演示 @openlibing/huaweicloud-oidc-client SDK 的 GitHub Action：基于 OIDC 免认证上传 checkout 出的根目录 README.md 到 OBS 并调用 APIG",
   "main": "index.js",
   "scripts": {
     "build": "ncc build index.js -o dist --license licenses.txt",
@@ -11,7 +11,7 @@
   "dependencies": {
     "@actions/core": "^1.10.1",
     "esdk-obs-nodejs": "^3.24.3",
-    "openlibing-client": "file:../../../openlibing-client-1.0.0.tgz"
+    "@openlibing/huaweicloud-oidc-client": "file:../../../openlibing-huaweicloud-oidc-client-1.0.0.tgz"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.1"

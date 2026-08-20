@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * openlibing-client：openlibing 平台与华为云 / gitcode / github 等平台的交互 SDK（npm 包入口）
+ * @openlibing/huaweicloud-oidc-client：openlibing 平台与华为云的交互 SDK（npm 包入口）
  *
  * 本包封装 openlibing 平台对接华为云的通用基础能力：
  *   1. OIDC 认证：getCredentials() 获取华为云临时凭证（AK/SK/SecurityToken），调用链为
@@ -29,7 +29,7 @@
  *   signer-v11.js   V11Signer：APIG V11-HMAC-SHA256 签名器
  *
  * 用法：
- *   const openlibing = require('openlibing-client');
+ *   const openlibing = require('@openlibing/huaweicloud-oidc-client');
  *
  *   // 开启调试模式（打印关键步骤与请求/响应日志，敏感字段脱敏）
  *   openlibing.configure({ debug: true });

@@ -1,0 +1,42 @@
+name: Deploy npm Package
+
+# 手动触发或打 tag 时发布（tag 形如 v1.0.0 / 1.0.0）
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish to npm registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (read .nvmrc or use 20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Validate publish config (pack only src/)
+        run: npm pack --dry-run
+
+      - name: Run SDK tests
+        run: npm test
+
+      - name: Verify npm account
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm (scoped public package)
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

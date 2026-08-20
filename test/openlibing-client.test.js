@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * openlibing-client SDK 测试套件
+ * @openlibing/huaweicloud-oidc-client SDK 测试套件
  *
  * 覆盖：
  *   1. 模块可加载、导出 getCredentials / configure / V11Signer / sendRequest
@@ -19,9 +19,8 @@
  */
 
 const assert = require('assert');
-const https = require('https');
+
 const path = require('path');
-const { EventEmitter } = require('events');
 
 const LIB_PATH = '../src';
 const SRC_DIR = path.resolve(__dirname, '../src');
@@ -37,47 +36,39 @@ function freshClient() {
   return require(LIB_PATH);
 }
 
-/** 拦截 https.request：按 hostname 路由响应，记录请求与请求体。 */
+/** 拦截 globalThis.fetch：按 URL 路由响应，记录请求与请求体。 */
 function installRequestInterceptor(routeResponse) {
   const records = [];
-  const origRequest = https.request;
-  https.request = function (options, cb) {
-    const writes = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async function (url, init = {}) {
+    const parsed = new URL(url);
     const record = {
-      options,
-      headers: options.headers,
-      hostname: options.hostname,
-      path: options.path,
-      method: options.method,
-      url: `https://${options.hostname}${options.path}`,
-      writes
+      url: url.toString(),
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: init.method || 'GET',
+      headers: init.headers || {},
+      body: init.body || ''
     };
     records.push(record);
 
-    const res = new EventEmitter();
-    res.statusCode = 200;
-    res.headers = { 'content-type': 'application/json' };
-    // 必须先调用回调挂上 data/end 监听器，再异步触发，否则 sendRequest 的 promise 不会 resolve
-    if (typeof cb === 'function') {
-      cb(res);
+    const r = routeResponse(record);
+    let statusCode = 200;
+    let body = r;
+    if (r && typeof r === 'object' && 'statusCode' in r) {
+      statusCode = r.statusCode;
+      body = r.body;
     }
-    process.nextTick(() => {
-      const r = routeResponse(record);
-      let body = r;
-      if (r && typeof r === 'object' && 'statusCode' in r) {
-        res.statusCode = r.statusCode;
-        body = r.body;
-      }
-      if (body !== null && body !== undefined) {
-        res.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)));
-      }
-      res.emit('end');
-    });
-    return { on() {}, write(b) { writes.push(Buffer.isBuffer(b) ? b.toString('utf8') : String(b)); }, end() {} };
+    const raw = body === null || body === undefined ? '' : (typeof body === 'string' ? body : JSON.stringify(body));
+    return {
+      status: statusCode,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () => raw
+    };
   };
   return {
     records,
-    restore() { https.request = origRequest; }
+    restore() { globalThis.fetch = origFetch; }
   };
 }
 
@@ -158,7 +149,7 @@ async function main() {
     assert.ok(rec.hostname.startsWith('sts.cn-southwest-2'), 'STS 端点区域应为 cn-southwest-2');
     assert.ok(rec.path.includes('/v5/agencies/assume-with-oidc'), 'STS 路径应为 assume-with-oidc');
     assert.strictEqual(rec.method, 'POST', 'STS 换证应为 POST');
-    const body = JSON.parse(rec.writes[0]);
+    const body = JSON.parse(rec.body);
     assert.strictEqual(body.provider_urn, `iam::${ACCOUNT_ID}:oidcProvider:GitHubActions`);
     assert.strictEqual(body.agency_urn, `iam::${ACCOUNT_ID}:agency:gitcode-actions`);
     assert.strictEqual(body.agency_session_name, 'gitcode-actions');
@@ -193,7 +184,7 @@ async function main() {
     assert.strictEqual(tokenRec.headers['Authorization'], 'Bearer actions-request-token-abc', '应携带 Bearer 认证头');
 
     const stsRec = int4.records[1];
-    const stsBody = JSON.parse(stsRec.writes[0]);
+    const stsBody = JSON.parse(stsRec.body);
     assert.strictEqual(stsBody.id_token, 'fake-actions-jwt', 'STS 的 id_token 应来自 Actions OIDC 接口');
     console.log('PASS 4: 无 @actions/core 时从 GitHub Actions 环境变量自申请 OIDC Token 的链路正确');
   } finally {
