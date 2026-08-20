@@ -14,11 +14,17 @@
  * 设计边界：只封装通用基础能力，不封装业务编排（如 callApig / uploadToObs 高层封装）。
  * OBS 上传等业务逻辑由使用方基于本 SDK 提供的临时凭证自行实现（OBS 使用自身签名协议）。
  *
+ * 调试模式：默认静默；configure({ debug: true }) 开启后打印关键步骤日志，包括每次
+ * HTTP 请求的请求行、请求头、请求体与响应状态码、响应头、响应体（敏感字段自动脱敏）。
+ *
  * 仅依赖 Node 内置 https / crypto / url，不依赖 @actions/core；OIDC Token 通过 GitHub
  * Actions 环境变量自包含申请，任意 Node 环境均可独立使用。
  *
  * 用法：
  *   const openlibing = require('./openlibing-client');
+ *
+ *   // 开启调试模式（打印关键步骤与请求/响应日志，敏感字段脱敏）
+ *   openlibing.configure({ debug: true });
  *
  *   // 1) OIDC 认证：获取临时凭证
  *   const cred = await openlibing.getCredentials();
@@ -46,9 +52,11 @@ const crypto = require('crypto');
 
 // ==================== 基础工具 ====================
 
-/** 输出日志（普通 Node 环境使用 console.log，不依赖 @actions/core）。 */
+/** 输出日志：仅在调试模式（configure({ debug: true })）下打印（普通 Node 环境使用 console.log，不依赖 @actions/core）。 */
 function log(msg) {
-  console.log(msg);
+  if (cfg.debug) {
+    console.log(msg);
+  }
 }
 
 /** 脱敏：仅保留首尾若干字符，中间用 * 代替。 */
@@ -57,6 +65,55 @@ function mask(value, head = 6, tail = 4) {
   const s = String(value);
   if (s.length <= head + tail) return s.slice(0, 2) + '***' + s.slice(-2);
   return s.slice(0, head) + '***' + s.slice(-tail) + `（长度 ${s.length}）`;
+}
+
+/** 调试日志中需要脱敏的字段名（请求头字段与 JSON 字段名，小写比较）。 */
+const SENSITIVE_KEYS = [
+  'authorization', 'x-security-token', 'x-auth-token', 'password', 'secret',
+  'id_token', 'access_key_id', 'secret_access_key', 'security_token',
+  'accesskeyid', 'secretaccesskey', 'securitytoken', 'client_secret'
+];
+
+/** JWT 特征（三段 base64url，以 eyJ 开头），用于在任意文本中识别并脱敏令牌。 */
+const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g;
+
+/** 文本脱敏：将其中的 JWT 令牌整体脱敏。 */
+function maskText(text) {
+  return String(text).replace(JWT_RE, (m) => mask(m, 20, 10));
+}
+
+/** 深度脱敏 JSON 结构：敏感字段名直接脱敏，其余字段递归处理（字符串再做 JWT 识别）。 */
+function maskDeep(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return maskText(value);
+  if (Array.isArray(value)) return value.map(maskDeep);
+  if (typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) {
+      out[k] = SENSITIVE_KEYS.includes(k.toLowerCase()) ? mask(value[k]) : maskDeep(value[k]);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** 请求头脱敏：敏感头字段值脱敏，其余原样。 */
+function maskHeaders(headers) {
+  const out = {};
+  for (const k of Object.keys(headers || {})) {
+    out[k] = SENSITIVE_KEYS.includes(k.toLowerCase()) ? mask(headers[k]) : headers[k];
+  }
+  return out;
+}
+
+/** 请求体/响应体脱敏：JSON 结构做深度脱敏，非 JSON 文本做 JWT 识别脱敏。 */
+function maskBody(body) {
+  const s = typeof body === 'string' ? body : JSON.stringify(body);
+  try {
+    return JSON.stringify(maskDeep(JSON.parse(s)));
+  } catch (e) {
+    return maskText(s);
+  }
 }
 
 // ==================== 内置固定配置（openlibing 账号） ====================
@@ -77,7 +134,9 @@ const CONFIG = {
   // 临时凭证默认有效期（秒）
   durationSeconds: 3600,
   // 提前刷新缓冲（秒），避免凭证在边界过期
-  refreshBufferSeconds: 300
+  refreshBufferSeconds: 300,
+  // 调试模式：开启后打印关键步骤日志（含每次 HTTP 请求/响应详情，敏感字段自动脱敏）
+  debug: false
 };
 
 // 当前生效配置（可用 configure() 覆盖）
@@ -88,13 +147,13 @@ let cfg = { ...CONFIG };
 /**
  * 覆盖内置配置（如更换账号 / 区域 / 受众 / 委托等）。
  * @param {Object} overrides 可覆盖字段：accountId/audience/agencyName/oidcProviderName/
- *                           region/stsAssumePath/durationSeconds/refreshBufferSeconds
+ *                           region/stsAssumePath/durationSeconds/refreshBufferSeconds/debug
  * @returns {Object} 覆盖后的完整配置（含全部内置默认值）
  */
 function configure(overrides = {}) {
   const allowed = [
     'accountId', 'audience', 'agencyName', 'oidcProviderName',
-    'region', 'stsAssumePath', 'durationSeconds', 'refreshBufferSeconds'
+    'region', 'stsAssumePath', 'durationSeconds', 'refreshBufferSeconds', 'debug'
   ];
   for (const k of allowed) {
     if (overrides[k] !== undefined) {
@@ -143,13 +202,22 @@ async function getCredentials(opts = {}) {
 
 /**
  * 发送 HTTPS 请求并解析 JSON 响应（通用基础能力，供调用 APIG 等接口使用）。
+ * 调试模式（configure({ debug: true })）下打印完整请求/响应日志，敏感字段自动脱敏。
  * @param {string} method  HTTP 方法（GET/POST/...）
  * @param {string} url     完整 URL（https://{host}{path}[?query]）
  * @param {Object} [headers] 请求头
  * @param {string} [body]    请求体（字符串）
- * @returns {Promise<{status: number, data: Object|string}>} JSON 解析失败时 data = { raw }
+ * @returns {Promise<{status: number, headers: Object, data: Object|string}>}
+ *          JSON 解析失败时 data = { raw }
  */
 function sendRequest(method, url, headers, body) {
+  if (cfg.debug) {
+    log(`--> ${String(method).toUpperCase()} ${url}`);
+    log(`--> 请求头: ${JSON.stringify(maskHeaders(headers))}`);
+    if (body) {
+      log(`--> 请求体: ${maskBody(body)}`);
+    }
+  }
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const options = {
@@ -165,6 +233,11 @@ function sendRequest(method, url, headers, body) {
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const raw = Buffer.concat(chunks).toString('utf8');
+        if (cfg.debug) {
+          log(`<-- HTTP 状态码: ${res.statusCode}`);
+          log(`<-- 响应头: ${JSON.stringify(res.headers || {})}`);
+          log(`<-- 响应体: ${raw ? maskBody(raw) : '(空)'}`);
+        }
         let data = {};
         if (raw) {
           try {
@@ -173,7 +246,7 @@ function sendRequest(method, url, headers, body) {
             data = { raw };
           }
         }
-        resolve({ status: res.statusCode, data });
+        resolve({ status: res.statusCode, headers: res.headers, data });
       });
     });
 
@@ -283,20 +356,17 @@ async function _assumeAgencyWithOIDC() {
   };
 
   log('=== 步骤2：调用 STS AssumeAgencyWithOIDC ===');
-  log(`endpoint            : ${stsEndpoint}`);
   log(`provider_urn        : ${body.provider_urn}`);
   log(`agency_urn          : ${body.agency_urn}`);
   log(`agency_session_name : ${body.agency_session_name}`);
   log(`duration_seconds    : ${body.duration_seconds}`);
-  log(`id_token            : ${mask(body.id_token, 20, 20)}`);
 
   const res = await sendRequest('POST', stsEndpoint, { 'Content-Type': 'application/json' }, JSON.stringify(body));
-  log(`STS 响应状态码 : ${res.status}`);
 
   if (res.status !== 200) {
     const code = res.data && (res.data.error_code || res.data.code);
     const msg = res.data && (res.data.error_msg || res.data.message);
-    log(`STS 失败详情 : ${JSON.stringify(res.data)}`);
+    log(`STS 失败详情 : ${maskBody(res.data)}`);
     log('=== 排查提示 ===');
     log('STS5.1001/403：多为信任策略条件不匹配，请将上方 OIDC Token 的 iss/aud/azp/sub 与华为云信任策略逐项比对。');
     log('  - iss 必须严格等于 https://token.actions.githubusercontent.com');
@@ -307,7 +377,7 @@ async function _assumeAgencyWithOIDC() {
 
   const cred = res.data.credentials;
   if (!cred || !cred.access_key_id || !cred.secret_access_key || !cred.security_token) {
-    log(`STS 响应体 : ${JSON.stringify(res.data)}`);
+    log(`STS 响应体 : ${maskBody(res.data)}`);
     throw new Error('STS auth failed: 响应中缺少临时凭证字段');
   }
 

@@ -14,6 +14,8 @@
  *   8. configure：覆盖 accountId / region / durationSeconds 等字段生效
  *   9. V11Signer：APIG V11-HMAC-SHA256 签名格式（Credential 四段 / SignedHeaders / Signature）
  *  10. sendRequest：HTTPS JSON 请求工具（发送与解析）
+ *  11. 调试模式：默认关闭静默；configure({ debug: true }) 开启后打印关键步骤与请求/响应日志
+ *  12. sendRequest：返回响应头；调试日志对 Authorization 头与 JWT 令牌自动脱敏
  */
 
 const assert = require('assert');
@@ -94,6 +96,19 @@ function pickHeader(headers, name) {
   return undefined;
 }
 
+/** 捕获 console.log 输出（SDK 调试日志走 console.log）。 */
+async function captureConsole(fn) {
+  const orig = console.log;
+  const lines = [];
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    const result = await fn();
+    return { lines, result };
+  } finally {
+    console.log = orig;
+  }
+}
+
 async function main() {
   // ---------- 1. 模块加载与导出 ----------
   let client = freshClient();
@@ -113,7 +128,8 @@ async function main() {
   assert.strictEqual(c0.stsAssumePath, '/v5/agencies/assume-with-oidc');
   assert.strictEqual(c0.durationSeconds, 3600);
   assert.strictEqual(c0.refreshBufferSeconds, 300);
-  console.log('PASS 2: 内置配置 = 账号ID/受众/委托/提供商/区域/STS路径/有效期 全部正确');
+  assert.strictEqual(c0.debug, false, 'debug 默认关闭');
+  console.log('PASS 2: 内置配置 = 账号ID/受众/委托/提供商/区域/STS路径/有效期/debug默认关闭 全部正确');
 
   // ---------- 3. OIDC -> STS 完整换证链路（环境变量 OIDC Token 覆盖） ----------
   client = freshClient();
@@ -269,6 +285,71 @@ async function main() {
     console.log('PASS 10: sendRequest 发送请求并解析 JSON 响应正确');
   } finally {
     int10.restore();
+  }
+
+  // ---------- 11. 调试模式（configure({ debug }) 控制） ----------
+  // 11a. 默认关闭：getCredentials 全程不打印任何日志
+  client = freshClient();
+  process.env.HUAWEICLOUD_OIDC_TOKEN = 'fake-jwt-debug-off';
+  const int11a = installRequestInterceptor(() => stsResponse('OFF'));
+  try {
+    const { lines } = await captureConsole(() => client.getCredentials());
+    assert.strictEqual(lines.length, 0, 'debug 关闭时不应打印任何日志');
+  } finally {
+    int11a.restore();
+    delete process.env.HUAWEICLOUD_OIDC_TOKEN;
+  }
+
+  // 11b. 开启后：打印关键步骤与 STS 请求/响应完整详情，临时凭证字段脱敏
+  client = freshClient();
+  assert.strictEqual(client.configure({ debug: true }).debug, true, 'configure 应支持开启 debug');
+  process.env.HUAWEICLOUD_OIDC_TOKEN = 'fake-jwt-debug-on';
+  const int11b = installRequestInterceptor(() => stsResponse('DBG'));
+  try {
+    const { lines } = await captureConsole(() => client.getCredentials());
+    const all = lines.join('\n');
+    assert.ok(lines.length > 0, 'debug 开启时应打印日志');
+    assert.ok(all.includes('=== 步骤1：申请 GitHub OIDC ID Token ==='), '应打印步骤1（OIDC 申请）');
+    assert.ok(all.includes('=== 步骤2：调用 STS AssumeAgencyWithOIDC ==='), '应打印步骤2（STS 换证）');
+    assert.ok(all.includes('=== 步骤3：成功获取临时安全凭证 ==='), '应打印步骤3（获取凭证）');
+    assert.ok(all.includes('--> POST https://sts.cn-southwest-2.myhuaweicloud.com/v5/agencies/assume-with-oidc'),
+      '应打印 STS 请求行（方法 + URL）');
+    assert.ok(all.includes('--> 请求头'), '应打印请求头');
+    assert.ok(all.includes('--> 请求体'), '应打印请求体');
+    assert.ok(all.includes('provider_urn'), '请求体中应可见 provider_urn（非敏感字段）');
+    assert.ok(all.includes('<-- HTTP 状态码: 200'), '应打印响应状态码');
+    assert.ok(all.includes('<-- 响应头'), '应打印响应头');
+    assert.ok(all.includes('<-- 响应体'), '应打印响应体');
+    assert.ok(all.includes('***'), '脱敏字段应包含 *** 标记');
+    assert.ok(!all.includes('"secret_access_key":"DBG_SK"'), '响应体中的临时 SK 应脱敏');
+    assert.ok(!all.includes('"security_token":"DBG_TOK"'), '响应体中的 SecurityToken 应脱敏');
+    console.log('PASS 11: 调试模式默认静默；开启后打印关键步骤与 STS 请求/响应详情且凭证脱敏');
+  } finally {
+    int11b.restore();
+    delete process.env.HUAWEICLOUD_OIDC_TOKEN;
+  }
+
+  // ---------- 12. sendRequest 返回响应头 + 调试日志脱敏（Authorization 头 / JWT） ----------
+  client = freshClient();
+  client.configure({ debug: true });
+  const fakeJwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dummySignature1234567890abcdef';
+  const int12 = installRequestInterceptor(() => ({ value: fakeJwt, extra: 'plain' }));
+  try {
+    const { lines, result } = await captureConsole(() =>
+      client.sendRequest('POST', 'https://api.example.com/tok',
+        { Authorization: 'Bearer secret-req-token-1234567890' },
+        JSON.stringify({ id_token: fakeJwt }))
+    );
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.headers['content-type'], 'application/json', 'sendRequest 应返回响应头');
+    const all = lines.join('\n');
+    assert.ok(all.includes('--> POST https://api.example.com/tok'), '应打印请求行');
+    assert.ok(!all.includes('secret-req-token-1234567890'), 'Authorization 头应脱敏');
+    assert.ok(!all.includes(fakeJwt), '日志中的 JWT 应整体脱敏');
+    assert.ok(all.includes('plain'), '非敏感字段应原样输出');
+    console.log('PASS 12: sendRequest 返回响应头；调试日志对 Authorization 头与 JWT 自动脱敏');
+  } finally {
+    int12.restore();
   }
 
   console.log('\nALL TESTS PASSED');

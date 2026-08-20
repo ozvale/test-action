@@ -33,6 +33,9 @@ test-action/
 ```js
 const openlibing = require('./sdk/openlibing-client');
 
+// 调试模式：默认静默；开启后打印关键步骤与每次 HTTP 请求/响应日志（敏感字段自动脱敏）
+openlibing.configure({ debug: true });
+
 // 1) OIDC 认证：GitHub Actions OIDC ID Token -> 华为云 STS AssumeAgencyWithOIDC 换证（带缓存自动刷新）
 const cred = await openlibing.getCredentials();
 // => { accessKeyId, secretAccessKey, securityToken, expiresAt, expiresIn }
@@ -48,7 +51,7 @@ const headers = signer.sign('GET', 'https://{apig-host}/v1/export', {}, '');
 
 // 3) HTTPS 请求并解析 JSON 响应
 const res = await openlibing.sendRequest('GET', 'https://{apig-host}/v1/export', headers, '');
-// => { status, data }
+// => { status, headers, data }
 ```
 
 导出的核心接口：
@@ -56,9 +59,17 @@ const res = await openlibing.sendRequest('GET', 'https://{apig-host}/v1/export',
 | 接口 | 说明 |
 | --- | --- |
 | `getCredentials(opts)` | 获取华为云临时凭证（AK/SK/SecurityToken），支持缓存自动刷新、`force` 强制刷新、并发去重 |
-| `configure(overrides)` | 覆盖内置 openlibing 默认配置（账号 ID、audience、委托、OIDC 提供商、区域等） |
+| `configure(overrides)` | 覆盖内置 openlibing 默认配置（账号 ID、audience、委托、OIDC 提供商、区域、`debug` 调试开关等） |
 | `V11Signer` | APIG V11-HMAC-SHA256 签名器（严格复刻华为云官方算法，作用域服务名固定 `apic`） |
-| `sendRequest(method, url, headers, body)` | HTTPS 请求工具，解析 JSON 响应 |
+| `sendRequest(method, url, headers, body)` | HTTPS 请求工具，解析 JSON 响应，返回 `{ status, headers, data }` |
+
+### 调试模式
+
+SDK 默认静默，`configure({ debug: true })` 开启调试模式后打印关键步骤日志：
+
+- OIDC 申请与 STS 换证的各步骤（含 OIDC Token 声明 iss/aud/azp/sub，便于与华为云信任策略比对）
+- 每次 HTTP 请求的请求行（方法 + URL）、请求头、请求体与响应状态码、响应头、响应体
+- 敏感字段自动脱敏：`Authorization`、`X-Security-Token`、`id_token`、临时 AK/SK/SecurityToken 及 JWT 令牌
 
 ## example：demo-action
 
@@ -68,6 +79,8 @@ const res = await openlibing.sendRequest('GET', 'https://{apig-host}/v1/export',
 2. **OIDC 免认证调用 APIG**：`getCredentials()` 换证 -> `V11Signer` 签名（含 `X-Security-Token`）-> `sendRequest()` 调用 APIG 接口。
 
 唯一输入 `file-path` 为待上传文件路径。其余参数使用内置演示默认值：OBS 桶 `openlibing-gitcode-action`、对象名 `oidc-demo-action/<文件名>`（取自 file-path）、APIG 网关域名与路径 `/version`。
+
+demo-action 内部开启 SDK 调试模式，运行日志按 4 个步骤打印，第三方接口（GitHub OIDC、华为云 STS、OBS、APIG）的请求地址、请求头、请求体与响应状态码、响应头、响应体均完整输出（敏感字段自动脱敏），便于在 Actions 日志中直接排查链路问题。
 
 ## workflow：demo-action-workflow.yml
 

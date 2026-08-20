@@ -64,8 +64,10 @@ module.exports = { getCredentials, configure, V11Signer, sendRequest };
 
 ### `configure(overrides)`
 
-- 内置 openlibing 默认配置，可覆盖：`accountId` / `audience` / `agencyName` / `oidcProviderName` / `region` / `stsAssumePath` / `durationSeconds` / `refreshBufferSeconds`。
+- 内置 openlibing 默认配置，可覆盖：`accountId` / `audience` / `agencyName` / `oidcProviderName` / `region` / `stsAssumePath` / `durationSeconds` / `refreshBufferSeconds` / `debug`。
 - 返回覆盖后的完整配置。
+- 调试模式：默认 `debug: false`（SDK 静默）；`debug: true` 开启后打印关键步骤日志——OIDC 申请与 STS 换证各步骤（含 OIDC Token 声明 iss/aud/azp/sub），以及每次 HTTP 请求的请求行、请求头、请求体与响应状态码、响应头、响应体。
+- 敏感字段自动脱敏：`Authorization`、`X-Security-Token`、`id_token`、临时 AK/SK/SecurityToken、JWT 令牌（正则识别），仅保留首尾若干字符；其余非敏感信息原样输出。
 
 ### `V11Signer`（原 shared/signer-v11.js 整体内联）
 
@@ -75,7 +77,8 @@ module.exports = { getCredentials, configure, V11Signer, sendRequest };
 
 ### `sendRequest(method, url, headers, body)`
 
-- HTTPS JSON 请求工具：发送请求、解析 JSON 响应，返回 `{ status, data }`（解析失败时 `data = { raw }`）。
+- HTTPS JSON 请求工具：发送请求、解析 JSON 响应，返回 `{ status, headers, data }`（解析失败时 `data = { raw }`）。
+- 调试模式下打印完整请求/响应日志（请求行、请求头、请求体、响应状态码、响应头、响应体，敏感字段脱敏），OIDC 申请与 STS 换证亦经由此工具，自动获得同样的日志。
 - 供 demo-action 调用 APIG 使用，属于通用基础能力。
 
 ## demo-action（example）
@@ -101,6 +104,14 @@ runs:
 1. **读取待上传文件**：读取输入 `file-path`（workflow 中传入 `./README.md`），校验文件存在，否则报错退出。
 2. **OIDC 免认证上传 OBS**：`getCredentials()` 换取临时凭证；`new ObsClient({ access_key_id, secret_access_key, security_token, server })`（`server = https://obs.{region}.myhuaweicloud.com`），`putObject({ Bucket, Key, SourceFile })`，`close()`。`ObsClient` 由入口顶层 `require('esdk-obs-nodejs')` 提供（ncc 可内联）。
 3. **OIDC 免认证调用 APIG**：`getCredentials()` 换证（缓存复用）；`V11Signer` 签名（含 `X-Security-Token`）；`sendRequest('GET', https://{apigHost}/version)`；2xx 判成功，非 2xx 输出 APIG 已知错误码排查提示并 `setFailed`。
+
+### 日志设计
+
+demo-action 打印执行步骤与关键日志，第三方接口调用的地址、请求头、请求体、响应头、响应体均输出（敏感字段自动脱敏）：
+
+- 执行按 4 个步骤分节打印：`--- 步骤 1/4：读取并校验待上传文件 ---` 至 `--- 步骤 4/4：基于 OIDC 临时凭证调用 APIG 接口 ---`。
+- demo-action 内部调用 `configure({ debug: true })` 开启 SDK 调试模式：GitHub OIDC 申请、STS 换证、APIG 调用的完整请求/响应日志由 SDK `sendRequest` 统一打印（`--> 请求行/请求头/请求体`、`<-- 状态码/响应头/响应体`）。
+- OBS 调用不经 SDK HTTP 工具，由 demo-action 自行打印：请求行（`PUT {server}/{bucket}/{key}`）、请求参数（Bucket/Key/SourceFile）、客户端参数（AK/SecurityToken 脱敏）、响应状态码/RequestId/解析后的响应头字段（ETag 等）。
 
 - 除 `file-path` 外所有参数使用内置演示默认值：OBS 桶 `openlibing-gitcode-action`、对象名 `oidc-demo-action/<文件名>`（取自 file-path）、APIG 网关域名 `242b859e54a641069d7af46c8b63d9fe.apic.cn-southwest-2.huaweicloudapis.com`、APIG 路径 `/version`；OIDC 换证参数使用 SDK 内置 openlibing 默认值。
 - 依赖：`@actions/core` + `esdk-obs-nodejs`。
@@ -128,8 +139,8 @@ jobs:
 
 | 目录 | 测试内容 |
 | --- | --- |
-| `sdk/test/openlibing-client.test.js` | 模块导出；内置 openlibing 配置；OIDC->STS 完整链路（环境变量覆盖 / Actions 自申请）；缓存复用；force 刷新；并发去重；configure 覆盖；V11Signer 签名格式（Credential 四段/SignedHeaders/Signature）；sendRequest 解析 |
-| `demo-action/test/demo-action.test.js` | 全流程：读取 file-path 文件 -> OBS 上传（注入 FakeObsClient + 拦截 STS）-> APIG 调用（拦截 HTTPS）；文件缺失校验；OBS 失败分支；APIG 非 2xx 分支 |
+| `sdk/test/openlibing-client.test.js` | 模块导出；内置 openlibing 配置（含 debug 默认关闭）；OIDC->STS 完整链路（环境变量覆盖 / Actions 自申请）；缓存复用；force 刷新；并发去重；configure 覆盖；V11Signer 签名格式（Credential 四段/SignedHeaders/Signature）；sendRequest 解析；调试模式（默认静默 / 开启后打印关键步骤与 STS 请求响应详情且凭证脱敏）；sendRequest 返回响应头与 Authorization/JWT 脱敏 |
+| `demo-action/test/demo-action.test.js` | 全流程：读取 file-path 文件 -> OBS 上传（注入 FakeObsClient + 拦截 STS）-> APIG 调用（拦截 HTTPS）；执行步骤与第三方接口请求/响应日志（stdout 捕获断言）与敏感字段脱敏；文件缺失校验；OBS 失败分支；APIG 非 2xx 分支 |
 
 - 测试沿用现有拦截器模式：先回调挂监听再异步触发 `data`/`end`，避免 promise 永不 resolve 的假通过。
 - `sdk` 测试与 `demo-action` 测试均通过 `require.cache` 清理隔离模块级凭证缓存。

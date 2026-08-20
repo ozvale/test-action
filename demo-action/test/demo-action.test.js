@@ -9,6 +9,9 @@
  *   2. 文件缺失校验：file-path 指向的文件不存在 -> setFailed，退出码置 1，不调用 putObject
  *   3. OBS 失败分支：putObject 非 2xx -> setFailed，退出码置 1
  *   4. APIG 非 2xx 分支：APIG 返回 401 -> setFailed，退出码置 1
+ *
+ * 另捕获 stdout（core.info 与 SDK 调试日志均写入 stdout）断言执行步骤与第三方接口
+ * 请求/响应日志（含敏感字段脱敏）。
  */
 
 const assert = require('assert');
@@ -103,6 +106,22 @@ function stsResponse() {
   };
 }
 
+/** 捕获 stdout 输出（core.info 与 SDK 调试日志 console.log 均写入 stdout）。 */
+async function captureOutput(fn) {
+  const orig = process.stdout.write;
+  const chunks = [];
+  process.stdout.write = function (chunk) {
+    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+    return true;
+  };
+  try {
+    const result = await fn();
+    return { output: chunks.join(''), result };
+  } finally {
+    process.stdout.write = orig;
+  }
+}
+
 async function main() {
   const origExitCode = process.exitCode;
   const tmpFile = path.join(os.tmpdir(), `demo-action-${Date.now()}.txt`);
@@ -149,8 +168,35 @@ async function main() {
   const int1 = installRequestInterceptor(route1);
   try {
     const { run } = require('../index.js');
-    await run();
+    const { output } = await captureOutput(() => run());
     assert.strictEqual(process.exitCode, origExitCode, '全流程成功不应置退出码');
+
+    // 执行步骤日志
+    for (const step of ['步骤 1/4', '步骤 2/4', '步骤 3/4', '步骤 4/4']) {
+      assert.ok(output.includes(step), `应打印执行步骤日志：${step}`);
+    }
+
+    // OBS 请求/响应详情
+    assert.ok(output.includes(`OBS 请求     : PUT https://obs.cn-southwest-2.myhuaweicloud.com/openlibing-gitcode-action/oidc-demo-action/${path.basename(tmpFile)}`),
+      '应打印 OBS 请求行（方法 + 地址 + 桶/对象名）');
+    assert.ok(output.includes('OBS 请求参数'), '应打印 OBS 请求参数');
+    assert.ok(output.includes('OBS 响应     : HTTP 200'), '应打印 OBS 响应状态码');
+    assert.ok(output.includes('OBS 响应头'), '应打印 OBS 响应头');
+    assert.ok(output.includes('OBS 上传成功'), '应打印 OBS 上传成功日志');
+
+    // SDK 调试日志：STS 与 APIG 第三方接口的请求/响应详情
+    assert.ok(output.includes('--> POST https://sts.cn-southwest-2.myhuaweicloud.com/v5/agencies/assume-with-oidc'),
+      '应打印 STS 请求行（方法 + URL）');
+    assert.ok(output.includes(`--> GET https://${APIG_HOST}/version`), '应打印 APIG 请求行（方法 + URL）');
+    assert.ok(output.includes('--> 请求头'), '应打印第三方接口请求头');
+    assert.ok(output.includes('--> 请求体'), '应打印第三方接口请求体');
+    assert.ok(output.includes('<-- HTTP 状态码: 200'), '应打印第三方接口响应状态码');
+    assert.ok(output.includes('<-- 响应头'), '应打印第三方接口响应头');
+    assert.ok(output.includes('<-- 响应体'), '应打印第三方接口响应体');
+
+    // 敏感字段脱敏
+    assert.ok(!output.includes('"secret_access_key":"T_SK"'), '日志中临时 SK 不应明文出现');
+    assert.ok(!output.includes('T_TOK'), '日志中 SecurityToken 不应明文出现');
 
     // OBS 客户端参数
     assert.strictEqual(obsOpts.access_key_id, 'T_AK');
@@ -175,7 +221,7 @@ async function main() {
       `Authorization 应为 V11 Credential 四段：${auth}`);
     assert.ok(/SignedHeaders=.*x-security-token/.test(auth), 'X-Security-Token 应参与签名');
     assert.strictEqual(pickHeader(apigRec.headers, 'x-security-token'), 'T_TOK', 'APIG 请求应携带 X-Security-Token');
-    console.log('PASS 1: 全流程 读文件 -> OBS 上传 -> APIG 调用（V11 签名 + X-Security-Token）成功');
+    console.log('PASS 1: 全流程 读文件 -> OBS 上传 -> APIG 调用（V11 签名 + X-Security-Token）成功，步骤与第三方接口请求/响应日志完整且脱敏');
   } finally {
     int1.restore();
     process.exitCode = origExitCode;
@@ -189,7 +235,7 @@ async function main() {
   stubObsClient(FakeObsClient);
   try {
     const { run } = require('../index.js');
-    await run();
+    await captureOutput(() => run());
     assert.strictEqual(process.exitCode, 1, '文件缺失应置退出码 1');
     assert.strictEqual(putCalls.length, 0, '文件缺失不应调用 putObject');
     console.log('PASS 2: 文件缺失校验，file-path 不存在置退出码 1，不调用 putObject');
@@ -211,7 +257,7 @@ async function main() {
   const int3 = installRequestInterceptor(route3);
   try {
     const { run } = require('../index.js');
-    await run();
+    await captureOutput(() => run());
     assert.strictEqual(process.exitCode, 1, 'OBS 上传失败应置退出码 1');
     console.log('PASS 3: OBS 失败分支，putObject 非 2xx 置退出码 1');
   } finally {
@@ -236,7 +282,7 @@ async function main() {
   const int4 = installRequestInterceptor(route4);
   try {
     const { run } = require('../index.js');
-    await run();
+    await captureOutput(() => run());
     assert.strictEqual(process.exitCode, 1, 'APIG 非 2xx 应置退出码 1');
     console.log('PASS 4: APIG 非 2xx 分支，置退出码 1');
   } finally {
