@@ -13,13 +13,13 @@ permissions:
 
 jobs:
   demo:
-    name: Demo @openlibing/huaweicloud-oidc-client SDK (OIDC upload to OBS + call APIG)
+    name: Demo SDK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code (includes README.md)
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run demo-action (OIDC-based upload of root README.md to OBS, then call APIG)
+      - name: Run demo-action
         uses: ./.github/actions/demo-action
         with:
           file-path: ./README.md

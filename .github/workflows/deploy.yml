@@ -13,30 +13,30 @@ permissions:
 
 jobs:
   publish:
-    name: Build and publish to npm registry
+    name: Publish npm
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (read .nvmrc or use 20)
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Validate publish config (pack only src/)
+      - name: Validate pack
         run: npm pack --dry-run
 
-      - name: Run SDK tests
+      - name: Test
         run: npm test
 
-      - name: Verify npm account
+      - name: Verify auth
         run: npm whoami
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish to npm (scoped public package)
+      - name: Publish
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
