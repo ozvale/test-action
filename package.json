@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "openlibing 平台与华为云交互 SDK：OIDC 认证获取临时凭证、APIG V11-HMAC-SHA256 签名、HTTPS 请求工具（基于 Node 内置 fetch）",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "files": [
     "src"
   ],
@@ -30,5 +33,6 @@
     "url": "https://github.com/ozvale/test-action/issues"
   },
   "homepage": "https://github.com/ozvale/test-action",
-  "license": "MIT"
+  "license": "MIT",
+  "author": "openlibing"
 }
