@@ -1,6 +1,6 @@
 {
   "name": "@openlibing/huaweicloud-oidc-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "openlibing 平台与华为云交互 SDK：OIDC 认证获取临时凭证、APIG V11-HMAC-SHA256 签名、HTTPS 请求工具（基于 Node 内置 fetch）",
   "main": "src/index.js",
   "exports": {
