@@ -32,6 +32,7 @@ jobs:
         run: npm test
 
       - name: Verify version matches tag
+        if: github.ref_type == 'tag'
         run: |
           PKG_VERSION=$(npm pkg get version | tr -d '"')
           TAG_VERSION="${GITHUB_REF_NAME#v}"
